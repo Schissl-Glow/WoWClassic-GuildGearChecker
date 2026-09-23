@@ -118,8 +118,7 @@ WoWClassic-GuildGearChecker/
 ├─ docs/       technische Dokumentation und Referenzen
 ├─ tests/      automatisierte Tests
 │  └─ bat/     Teststarter inklusive TESTEN_ALLES.bat
-├─ tools/      Hilfs- und Entwicklungswerkzeuge
-│  └─ bat/     Wartungs-, Diagnose- und Entwicklerstarter
+├─ tools/      benötigte Hilfs- und Laufzeitwerkzeuge
 ├─ INSTALLIEREN.bat
 ├─ STARTEN_GuildGearChecker.bat
 └─ STARTEN_PortraitGrabber.bat
