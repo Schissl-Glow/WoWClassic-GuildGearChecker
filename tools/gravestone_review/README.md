@@ -1,6 +1,6 @@
 # Gravestone Review Tool v0.7.0
 
-Standalone-Prüftool für neue Grabstein-Assets des Guildchecker-Projekts.
+Standalone-Prüftool für neue Grabstein-Assets von [**WoWClassic-GuildGearChecker**](https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker).
 
 ## Review-Workflow
 
@@ -40,4 +40,4 @@ Die vorhandene Miniforge-Installation wird weiterhin automatisch gesucht. Eine z
 python tools\gravestone_review\gravestone_review_tool.py --self-test
 ```
 
-Der Self-Test verändert keinen realen Guildchecker-Bestand; er arbeitet in einem temporären Testprojekt.
+Der Self-Test verändert keinen produktiven Bestand von [**WoWClassic-GuildGearChecker**](https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker); er arbeitet in einem temporären Testprojekt.
