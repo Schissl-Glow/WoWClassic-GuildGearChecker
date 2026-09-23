@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/checker_banner.png" alt="Bierstuben – GuildGearChecker" width="100%">
+  <img src="assets/checker_banner.png" alt="WoWClassic-GuildGearChecker" width="100%">
 </p>
 
-<h1 align="center">Bierstuben – GuildGearChecker</h1>
+<h1 align="center"><a href="https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker"><strong>WoWClassic-GuildGearChecker</strong></a></h1>
 
 <p align="center">
   Guild-Management und Raid-Organisation für World of Warcraft Classic.
@@ -26,9 +26,9 @@
 
 ---
 
-## Über Bierstuben
+## Über WoWClassic-GuildGearChecker
 
-**Bierstuben – GuildGearChecker** bündelt die Werkzeuge für die Verwaltung einer WoW-Classic-Gilde in einer Desktop-Anwendung. Mitglieder, Charaktere, Roster, Raids, Attendance, Raidpunkte, DKP, Rewards, Portraits und der Friedhof werden innerhalb eines gemeinsamen Projektbestands verwaltet.
+[**WoWClassic-GuildGearChecker**](https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker) bündelt die Werkzeuge für die Verwaltung einer WoW-Classic-Gilde in einer Desktop-Anwendung. Mitglieder, Charaktere, Roster, Raids, Attendance, Raidpunkte, DKP, Rewards, Portraits und der Friedhof werden innerhalb eines gemeinsamen Projektbestands verwaltet.
 
 Der aktuelle Desktop-Client basiert auf **Python 3.12+ und PySide6/Qt** und wird für Windows entwickelt.
 
@@ -56,17 +56,17 @@ Details zu den Änderungen stehen im [Changelog](CHANGELOG.md).
 ## Portrait + Charakter Info Grabber
 
 <p align="center">
-  <img src="assets/grabber_banner.png" alt="Bierstuben – Portrait + Charakter Info Grabber" width="100%">
+  <img src="assets/grabber_banner.png" alt="WoWClassic-GuildGearChecker – Portrait + Charakter Info Grabber" width="100%">
 </p>
 
-Der **Portrait + Charakter Info Grabber** ist das ergänzende Werkzeug zum GuildGearChecker und arbeitet mit demselben Projektbestand.
+Der **Portrait + Charakter Info Grabber** ist das ergänzende Werkzeug zum [**WoWClassic-GuildGearChecker**](https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker) und arbeitet mit demselben Projektbestand.
 
 Er unterstützt insbesondere:
 
 - Erstellen und Aktualisieren von Charakterportraits
 - Bearbeiten von Portraitausschnitt, Position und Zoom
 - Ermitteln verfügbarer Charakterinformationen wie **Rasse und Klasse** aus der verwendeten Charakterquelle
-- projektbezogene Übergabe der ermittelten Daten an den GuildGearChecker
+- projektbezogene Übergabe der ermittelten Daten an [**WoWClassic-GuildGearChecker**](https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker)
 - Bearbeitung fehlender Portraits und Charakterinformationen
 - Portrait- und Friedhofs-Workflows für bestehende Charaktere
 
@@ -82,7 +82,7 @@ Für den Raid-Import steht ein separates Firefox-Add-on zur Verfügung. **WoWLog
 
 ➡️ **[WoWLogHelper bei Firefox Add-ons öffnen](https://addons.mozilla.org/de/developers/addon/wowloghelper/versions)**
 
-Das Add-on wird nicht im GuildGearChecker-Repository mitgeführt. Dadurch bleibt die Browser-Erweiterung unabhängig aktualisierbar und es werden keine veralteten Add-on-Pakete im Projekt abgelegt.
+Das Add-on wird nicht im Repository von [**WoWClassic-GuildGearChecker**](https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker) mitgeführt. Dadurch bleibt die Browser-Erweiterung unabhängig aktualisierbar und es werden keine veralteten Add-on-Pakete im Projekt abgelegt.
 
 ## Installation und Start
 
@@ -110,7 +110,7 @@ Fertige Versionen sollen künftig über **GitHub Releases** bereitgestellt werde
 ## Projektstruktur
 
 ```text
-WOW-GuildGearChecker/
+WoWClassic-GuildGearChecker/
 ├─ app/        Anwendung und Fachlogik
 ├─ assets/     Banner, Klassenicons, Fonts, Grabsteine und Rewards
 ├─ config/     lokale Anwendungseinstellungen
@@ -144,6 +144,6 @@ Dieses öffentliche Repository enthält ausschließlich freigegebene Stände aus
 ---
 
 <p align="center">
-  <strong>Bierstuben – GuildGearChecker</strong><br>
+  <a href="https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker"><strong>WoWClassic-GuildGearChecker</strong></a><br>
   WoW Classic Guild Management
 </p>
