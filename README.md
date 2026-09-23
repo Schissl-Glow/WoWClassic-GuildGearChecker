@@ -75,7 +75,7 @@ Der Grabber wird unter Windows über **`STARTEN_PortraitGrabber.bat`** gestartet
 ## Firefox Add-on – WoWLogHelper
 
 <p align="center">
-  <img src="assets/wowloghelper_banner_v3.jpg" alt="WoWLogHelper – CSV Download Helper" width="100%">
+  <img src="assets/csvhelper_banner.png" alt="WoWLogHelper – CSV Download Helper" width="100%">
 </p>
 
 Für den Raid-Import steht ein separates Firefox-Add-on zur Verfügung. **WoWLogHelper** unterstützt das Herunterladen der benötigten Warcraft-Logs-CSV-Dateien.
