@@ -93,7 +93,7 @@ The add-on is not bundled inside the [**WoWClassic-GuildGearChecker**](https://g
 ### Prerequisites
 
 - Windows
-- Miniforge / Conda
+- **Miniforge is required:** [Download Miniforge from conda-forge](https://conda-forge.org/download/)
 - Internet access for the initial dependency setup
 
 At the moment, no standalone EXE is distributed. The included installer creates a local Python/Qt environment under the current Windows user profile.
