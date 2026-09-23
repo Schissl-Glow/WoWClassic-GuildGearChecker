@@ -30,7 +30,7 @@ set "PYTHONPATH="
 set "QT_PLUGIN_PATH="
 
 echo ============================================================
-echo GuildGearChecker v0.11.2 Tester - Gesamttest
+echo WoWClassic-GuildGearChecker v0.11.3 Tester - Gesamttest
 echo ============================================================
 echo Python:
 echo   %GGC_PYTHON%
