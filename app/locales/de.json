@@ -154,6 +154,8 @@
     "review_needed": "Prüfung nötig"
   },
   "player_profile": {
+    "character_family": "Charakterfamilie",
+    "current_main": "Aktueller Main: {name}",
     "title": "Spielerprofil – {name}",
     "open_profile": "Spielerprofil",
     "back_to_roster": "Zurück zum Roster",
@@ -228,6 +230,19 @@
     "point_history": "Punktehistorie",
     "player_history": "Spielerhistorie"
   },
+  "dkp_history": {
+    "tab": "DKP-Historie",
+    "hint": "Gespeicherte DKP-Ereignisse aus der synchronisierten CLM-Historie.",
+    "source": "Raid / Quelle",
+    "type": "Typ",
+    "change": "Änderung",
+    "reason": "Begründung",
+    "clm_source": "CLM-Raid {id}",
+    "kind_earned_raid": "Raid-Gutschrift",
+    "kind_earned_bench": "Bench-Gutschrift",
+    "kind_earned_other": "Sonstige Gutschrift",
+    "kind_correction": "Korrektur"
+  },
   "gear": {
     "label": "Gear",
     "level": "Level",
@@ -291,6 +306,7 @@
     "filter": "Filter",
     "search": "Suche",
     "last_checked": "Zuletzt geprüft",
+    "last_raid": "Letzter Raid",
     "race": "Rasse",
     "associated_main": "Zugehöriger Main",
     "no_active_main": "Kein aktiver Main",
@@ -423,6 +439,7 @@
     "confirm_gear_recheck": "Ausrüstung erneut geprüft",
     "check_outdated": "Prüfung veraltet",
     "gear_check_settings": "Ausrüstungsprüfung",
+    "local_settings": "Lokale Einstellungen",
     "gear_check_settings_help": "Optionaler Hinweis auf veraltete manuelle Ausrüstungsprüfungen. Es wird niemals automatisch geprüft oder ein Browser gestartet.",
     "track_outdated_checks": "Veraltete Ausrüstungsprüfung überwachen",
     "warn_after_days": "Warnung nach",
@@ -441,7 +458,8 @@
     "new_player": "Neuer Spieler",
     "load_csv": "CSV laden",
     "search_placeholder": "Suchen …",
-    "table_main_twink": "Main / Twink",
+    "table_main_twink": "Charaktertyp",
+    "table_assigned_main": "Zugehöriger Main",
     "table_raid_role": "Raid-Rolle",
     "table_help": "Zelle anklicken oder doppelklicken, um Mitgliedsdaten direkt zu bearbeiten. Letzte Prüfung ist schreibgeschützt.",
     "character_type": "Charaktertyp",
@@ -540,6 +558,10 @@
     "bulk_participants_summary": "Spieler im ausgewählten Raid ({total}) · In Gilde erkannt: {recognized} · Nicht zugeordnet: {unrecognized}",
     "bulk_participant_recognized": "In Gilde eindeutig erkannt",
     "bulk_participant_unrecognized": "Nicht eindeutig in der Gilde zugeordnet",
+    "bulk_assign_existing": "Vorhandenen Charakter zuordnen",
+    "bulk_character_search": "Charakter suchen …",
+    "bulk_discard_unknown": "Verwerfen",
+    "wcl_alias_exact_conflict": "Der WCL-Name {name} stimmt bereits eindeutig mit einem anderen Gildencharakter überein.",
     "bulk_select_all_new": "Alle neuen auswählen",
     "bulk_clear_selection": "Auswahl aufheben",
     "bulk_conflict": "Metadaten und Dateiname widersprechen sich bei: {field}.",
@@ -585,6 +607,8 @@
     "csv_summary": "{recognized} eindeutige CSV-Namen · {known} bekannt · {open} offene Zuordnungen · {duplicates} Duplikate · {merged} Player-Zusammenführungen",
     "csv_metadata_ignored": "CSV-Metadatum {field} wurde ignoriert: {error}",
     "created_with_attendance": "Raid {name} mit {participants} Teilgenommenen und {bench} Bench-Spielern wurde gespeichert.",
+    "date_range": "Zeitraum",
+    "filter_search": "Filter / Suche",
     "date_from": "Von (JJJJ-MM-TT)",
     "date_to": "Bis (JJJJ-MM-TT)",
     "player_search": "Spieler suchen",
@@ -681,6 +705,8 @@
     "sort_last_attendance": "Letzte Teilnahme"
   },
   "roster": {
+    "variant_classic": "Legacy",
+    "variant_draft": "Neu",
     "title": "Roster",
     "main_tanks": "Main Tanks",
     "tanks": "Tanks",

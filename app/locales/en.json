@@ -154,6 +154,8 @@
     "review_needed": "Review required"
   },
   "player_profile": {
+    "character_family": "Character family",
+    "current_main": "Current main: {name}",
     "title": "Player Profile – {name}",
     "open_profile": "Player Profile",
     "back_to_roster": "Back to Roster",
@@ -228,6 +230,19 @@
     "point_history": "Point History",
     "player_history": "Player History"
   },
+  "dkp_history": {
+    "tab": "DKP History",
+    "hint": "Saved DKP events from synchronized CLM history.",
+    "source": "Raid / Source",
+    "type": "Type",
+    "change": "Change",
+    "reason": "Reason",
+    "clm_source": "CLM raid {id}",
+    "kind_earned_raid": "Raid award",
+    "kind_earned_bench": "Bench award",
+    "kind_earned_other": "Other award",
+    "kind_correction": "Correction"
+  },
   "gear": {
     "label": "Gear",
     "level": "Level",
@@ -291,6 +306,7 @@
     "filter": "Filter",
     "search": "Search",
     "last_checked": "Last Checked",
+    "last_raid": "Last Raid",
     "race": "Race",
     "associated_main": "Associated Main",
     "no_active_main": "No active main",
@@ -423,6 +439,7 @@
     "confirm_gear_recheck": "Confirm Gear Recheck",
     "check_outdated": "Check outdated",
     "gear_check_settings": "Gear Check Tracking",
+    "local_settings": "Local Settings",
     "gear_check_settings_help": "Optional warning for outdated manual gear checks. This never triggers an automatic check or opens a browser.",
     "track_outdated_checks": "Track outdated gear checks",
     "warn_after_days": "Warn after",
@@ -441,7 +458,8 @@
     "new_player": "New Player",
     "load_csv": "Load CSV",
     "search_placeholder": "Search …",
-    "table_main_twink": "Main / Twink",
+    "table_main_twink": "Character Type",
+    "table_assigned_main": "Assigned Main",
     "table_raid_role": "Raid Role",
     "table_help": "Click or double-click a cell to edit member data directly. Last check is read-only.",
     "character_type": "Character Type",
@@ -540,6 +558,10 @@
     "bulk_participants_summary": "Players in selected raid ({total}) · Recognized in guild: {recognized} · Unassigned: {unrecognized}",
     "bulk_participant_recognized": "Unambiguously recognized in guild",
     "bulk_participant_unrecognized": "Not unambiguously assigned in guild",
+    "bulk_assign_existing": "Assign existing character",
+    "bulk_character_search": "Search characters …",
+    "bulk_discard_unknown": "Discard",
+    "wcl_alias_exact_conflict": "WCL name {name} already matches another guild character exactly.",
     "bulk_select_all_new": "Select all new",
     "bulk_clear_selection": "Clear selection",
     "bulk_conflict": "Metadata and filename conflict for: {field}.",
@@ -585,6 +607,8 @@
     "csv_summary": "{recognized} unique CSV names · {known} known · {open} unresolved assignments · {duplicates} duplicates · {merged} player merges",
     "csv_metadata_ignored": "CSV metadata {field} was ignored: {error}",
     "created_with_attendance": "Raid {name} was saved with {participants} present players and {bench} bench players.",
+    "date_range": "Date range",
+    "filter_search": "Filters / Search",
     "date_from": "From (YYYY-MM-DD)",
     "date_to": "To (YYYY-MM-DD)",
     "player_search": "Search players",
@@ -681,6 +705,8 @@
     "sort_last_attendance": "Last Attendance"
   },
   "roster": {
+    "variant_classic": "Legacy",
+    "variant_draft": "New",
     "title": "Roster",
     "main_tanks": "Main Tanks",
     "tanks": "Tanks",

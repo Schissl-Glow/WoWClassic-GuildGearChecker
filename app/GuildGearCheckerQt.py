@@ -25,7 +25,9 @@ from math import sqrt
 from pathlib import Path
 from typing import Iterable
 
-from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import (
+    QEvent, QPoint, QRect, QSize, Qt, QTimer, QSortFilterProxyModel, Signal,
+)
 from PySide6.QtGui import (
     QAction,
     QColor,
@@ -35,6 +37,7 @@ from PySide6.QtGui import (
     QImage,
     QKeySequence,
     QPainter,
+    QPalette,
     QPainterPath,
     QPen,
     QPixmap,
@@ -292,7 +295,7 @@ try:
         PlayerMergeConflictError, apply_player_merge, plan_player_merge,
     )
     from app.raid_points import base_points_for_status, build_point_history
-    from app.raid_attendance import exact_name_key
+    from app.raid_attendance import ATTENDANCE_STATUSES, exact_name_key
     from app.rewards import (
         FrameOpeningRect, RewardAssignments, RewardRegistry, active_reward_thresholds,
         eternal_dkp_reward_thresholds,
@@ -310,7 +313,7 @@ except ImportError:
         PlayerMergeConflictError, apply_player_merge, plan_player_merge,
     )
     from raid_points import base_points_for_status, build_point_history  # type: ignore
-    from raid_attendance import exact_name_key  # type: ignore
+    from raid_attendance import ATTENDANCE_STATUSES, exact_name_key  # type: ignore
     from rewards import (  # type: ignore
         FrameOpeningRect, RewardAssignments, RewardRegistry, active_reward_thresholds,
         eternal_dkp_reward_thresholds,
@@ -320,17 +323,23 @@ except ImportError:
         PlayerProfileViewModel, active_player_options, build_player_profile,
     )
 
-QT_PREVIEW_VERSION = "0.11.3-test3"
 CHECKER_BANNER_HEIGHT = 200
-CHECKER_BANNER_FOCAL_POINT = (0.55, 0.0)
+CHECKER_BANNER_MAX_COVER_WIDTH = 2200
+CHECKER_BANNER_FOCAL_POINT = (0.55, 0.22)
 CHECKER_BANNER_OVERLAY_ALPHA = 56  # ~22 %, matching the legacy banner darkening
-MEMBER_DETAIL_PORTRAIT_SIZE = 124
+MEMBER_DETAIL_PORTRAIT_SIZE = 220
 MEMBER_DETAIL_TABS_MIN_HEIGHT = 205
 MEMBER_DETAIL_SCROLL_HEIGHT_TOLERANCE = 64
 RAID_MATRIX_HEADER_HEIGHT = 48
 RAID_MATRIX_ROW_HEIGHT = 32
 RAID_MATRIX_BACKGROUND_ROLE = int(Qt.ItemDataRole.UserRole) + 101
 RAID_ATTENDANCE_FIXED_COLUMNS = 10
+RAID_MATRIX_STAT_COLUMN_WIDTHS = (100, 100, 72, 110, 78, 78, 100, 116, 110)
+MANAGEMENT_COLUMN_WIDTHS_SETTING = "management_member_table_column_widths"
+MANAGEMENT_COLUMN_ORDER_SETTING = "management_member_table_column_order"
+ROSTER_CLASSIC_ZOOM_MIN = 60
+ROSTER_DRAFT_ZOOM_MIN = 40
+ROSTER_ZOOM_MAX = 140
 
 BG = "#0c1015"
 PANEL = "#141a21"
@@ -429,9 +438,9 @@ QPushButton#viewSwitchButton {{
     border-radius: 3px;
 }}
 QPushButton#viewSwitchButton:checked {{
-    background: #4b6177;
-    border-color: #7b94ad;
-    color: #ffffff;
+    background: #302b22;
+    border-color: #80643f;
+    color: #f5dfb1;
     font-weight: 700;
 }}
 QPushButton#navButton {{
@@ -465,6 +474,12 @@ QFrame#graveZoomBar {{
     border: 1px solid #475c6f;
     border-radius: 5px;
 }}
+QFrame#rosterZoomBar {{
+    background: rgba(12, 20, 28, 220);
+    border: 1px solid #475c6f;
+    border-radius: 5px;
+}}
+QFrame#rosterZoomBar[modernView="true"] {{ border-color:#80643f; }}
 QSlider::groove:horizontal {{
     height: 5px; background: #26313c; border-radius: 2px;
 }}
@@ -480,14 +495,16 @@ QLineEdit, QComboBox, QSpinBox, QTextEdit {{
     border: 1px solid #35414d;
     border-radius: 5px;
     padding: 6px;
-    selection-background-color: #496681;
+    selection-background-color: #302b22;
+    selection-color: #f5dfb1;
 }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QTextEdit:focus {{ border-color: {GOLD}; }}
 QComboBox QAbstractItemView {{
     background: #171e26;
     color: {TEXT};
     border: 1px solid #3c4855;
-    selection-background-color: #354b61;
+    selection-background-color: #302b22;
+    selection-color: #f5dfb1;
     padding: 4px;
 }}
 QComboBox QAbstractItemView::item {{
@@ -500,22 +517,26 @@ QPushButton#detailAction {{
 }}
 QCheckBox {{ spacing: 7px; }}
 QCheckBox::indicator {{ width: 16px; height: 16px; }}
+QCheckBox::indicator:checked, QRadioButton::indicator:checked {{
+    background: #80643f; border: 1px solid #c7a265;
+}}
 QTableWidget {{
     background: #11171e;
     alternate-background-color: #141b23;
     border: 1px solid {BORDER};
     gridline-color: #202a34;
-    selection-background-color: #31485e;
-    selection-color: white;
+    selection-background-color: #302b22;
+    selection-color: #f5dfb1;
     outline: 0;
 }}
 QTableWidget::item {{ padding: 6px; border-bottom: 1px solid #202a34; }}
+QTableWidget::item:selected {{ background:#302b22;color:#f5dfb1; }}
 QHeaderView::section {{
-    background: #1d2630;
-    color: #dce3e9;
+    background: #202830;
+    color: #e1c183;
     border: none;
-    border-right: 1px solid #303b47;
-    border-bottom: 1px solid #424d59;
+    border-right: 1px solid #584832;
+    border-bottom: 1px solid #80643f;
     padding: 7px;
     font-weight: 600;
 }}
@@ -546,9 +567,15 @@ QTabBar::tab:selected {{
 QSplitter::handle {{ background: #26313c; width: 2px; }}
 QStatusBar {{ background: #10161d; color: {MUTED}; border-top: 1px solid #29333e; }}
 QMenuBar {{ background: #10161d; color: #dce3e9; }}
-QMenuBar::item:selected {{ background: #25313d; }}
+QMenuBar::item:selected {{ background: #302b22; color:#f5dfb1; }}
 QMenu {{ background: #161d25; color: #e8edf1; border: 1px solid #394450; }}
-QMenu::item:selected {{ background: #304559; }}
+QMenu::item:selected {{ background: #302b22; color:#f5dfb1; }}
+QToolTip {{
+    background-color:#171e26;
+    color:#e8edf1;
+    border:1px solid #80643f;
+    padding:4px 6px;
+}}
 """
 
 
@@ -558,6 +585,63 @@ def set_button_role(button: QPushButton, *, primary: bool = False, danger: bool 
     if danger:
         button.setProperty("danger", True)
     return button
+
+
+class ResponsiveSettingsGrid(QWidget):
+    """Reflow the settings sections from two columns to one as space narrows."""
+
+    def __init__(self, breakpoint: int = 1180, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._breakpoint = breakpoint
+        self._left_sections: list[QWidget] = []
+        self._right_sections: list[QWidget] = []
+        self._footer_sections: list[QWidget] = []
+        self._wide: bool | None = None
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 8, 0)
+        self._grid.setHorizontalSpacing(12)
+        self._grid.setVerticalSpacing(10)
+        self._grid.setColumnStretch(0, 1)
+        self._grid.setColumnStretch(1, 1)
+
+    @property
+    def is_wide_layout(self) -> bool:
+        return bool(self._wide)
+
+    def set_sections(
+        self, left: list[QWidget], right: list[QWidget], footer: list[QWidget],
+    ) -> None:
+        self._left_sections = left
+        self._right_sections = right
+        self._footer_sections = footer
+        self._reflow(self.width() >= self._breakpoint)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt override
+        super().resizeEvent(event)
+        self._reflow(self.width() >= self._breakpoint)
+
+    def _reflow(self, wide: bool) -> None:
+        if wide == self._wide:
+            return
+        self._wide = wide
+        for widget in (*self._left_sections, *self._right_sections, *self._footer_sections):
+            self._grid.removeWidget(widget)
+        if wide:
+            self._grid.setColumnStretch(0, 1)
+            self._grid.setColumnStretch(1, 1)
+            for row, widget in enumerate(self._left_sections):
+                self._grid.addWidget(widget, row, 0)
+            for row, widget in enumerate(self._right_sections):
+                self._grid.addWidget(widget, row, 1)
+            footer_row = max(len(self._left_sections), len(self._right_sections))
+            for offset, widget in enumerate(self._footer_sections):
+                self._grid.addWidget(widget, footer_row + offset, 0, 1, 2)
+        else:
+            self._grid.setColumnStretch(0, 1)
+            self._grid.setColumnStretch(1, 0)
+            sections = (*self._left_sections, *self._right_sections, *self._footer_sections)
+            for row, widget in enumerate(sections):
+                self._grid.addWidget(widget, row, 0)
 
 
 def pil_to_pixmap(image) -> QPixmap:
@@ -635,24 +719,19 @@ class HeaderWidget(QWidget):
             return
         if target == self._rendered_size:
             return
-        source_size = self._source.size()
-        scale = max(
-            target.width() / source_size.width(),
-            target.height() / source_size.height(),
-        )
-        scaled_size = QSize(
-            max(1, round(source_size.width() * scale)),
-            max(1, round(source_size.height() * scale)),
-        )
+        cover_size = QSize(min(target.width(), CHECKER_BANNER_MAX_COVER_WIDTH), target.height())
         scaled = self._source.scaled(
-            scaled_size,
-            Qt.AspectRatioMode.IgnoreAspectRatio,
+            cover_size,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
             Qt.TransformationMode.SmoothTransformation,
         )
-        left = -round((scaled.width() - target.width()) * CHECKER_BANNER_FOCAL_POINT[0])
+        if scaled.width() <= target.width():
+            left = (target.width() - scaled.width()) // 2
+        else:
+            left = -round((scaled.width() - target.width()) * CHECKER_BANNER_FOCAL_POINT[0])
         top = -round((scaled.height() - target.height()) * CHECKER_BANNER_FOCAL_POINT[1])
         rendered = QPixmap(target)
-        rendered.fill(Qt.GlobalColor.transparent)
+        rendered.fill(QColor(BG))
         painter = QPainter(rendered)
         painter.drawPixmap(left, top, scaled)
         painter.end()
@@ -897,6 +976,16 @@ class ResponsiveCardGrid(QWidget):
         self._last_columns = 0
         self.reflow()
 
+    def set_card_metrics(self, card_width: int, gap: int) -> None:
+        """Update layout geometry without replacing the existing card widgets."""
+        self.card_width = max(1, int(card_width))
+        self.gap = max(0, int(gap))
+        self._layout.setHorizontalSpacing(self.gap)
+        self._layout.setVerticalSpacing(self.gap)
+        self._last_columns = 0
+        self.updateGeometry()
+        self.reflow()
+
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
         self._pending.start(40)
@@ -932,6 +1021,7 @@ class GraveyardCanvas(QWidget):
         self._background = QPixmap()
         self._background_loaded = False
         self._background_cache: dict[tuple[int, int], QPixmap] = {}
+        self._scaled_card_cache: dict[tuple[str, int, int, int], QPixmap] = {}
         self.setMouseTracking(True)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
         self.setMinimumHeight(520)
@@ -986,17 +1076,26 @@ class GraveyardCanvas(QWidget):
     def set_scene(self, cards: Iterable[tuple[str, QPixmap]], *, zoom_percent: int,
                   summary: str, empty_text: str) -> None:
         self._cards = list(cards)
-        self._zoom_percent = max(60, min(140, int(zoom_percent)))
+        self._scaled_card_cache.clear()
         self._summary = str(summary)
         self._empty_text = str(empty_text)
+        self._zoom_percent = max(40, min(140, int(zoom_percent)))
+        self._recalculate_height()
+        self.update()
+
+    def set_zoom_percent(self, value: int) -> None:
+        value = max(40, min(140, int(value)))
+        if value == self._zoom_percent and self._card_rects:
+            return
+        self._zoom_percent = value
         self._recalculate_height()
         self.update()
 
     def _display_card_size(self) -> tuple[int, int]:
         factor = self._zoom_percent / 100.0
         return (
-            max(96, round(GRAVESTONE_CARD_SIZE[0] * factor)),
-            max(132, round(GRAVESTONE_CARD_SIZE[1] * factor)),
+            max(44, round(GRAVESTONE_CARD_SIZE[0] * factor)),
+            max(60, round(GRAVESTONE_CARD_SIZE[1] * factor)),
         )
 
     def _layout_data(self) -> tuple[list[tuple[str, QRect]], int]:
@@ -1073,20 +1172,20 @@ class GraveyardCanvas(QWidget):
             painter.fillRect(self.rect(), QColor(3, 8, 12, 42))
 
         header_rect = QRect(18, 18, max(120, self.width() - 36), 84)
-        painter.setPen(QPen(QColor("#475c6f"), 1))
-        painter.setBrush(QColor(10, 18, 26, 190))
+        painter.setPen(QPen(QColor("#80643f"), 1))
+        painter.setBrush(QColor(17, 24, 31, 218))
         painter.drawRoundedRect(header_rect, 3, 3)
         painter.setBrush(Qt.BrushStyle.NoBrush)
 
         title_font = QFont(self._title_font_family, 22)
         title_font.setWeight(QFont.Weight.DemiBold)
         painter.setFont(title_font)
-        painter.setPen(QColor("#f2f7fb"))
+        painter.setPen(QColor("#f5dfb1"))
         painter.drawText(QRect(38, 28, max(120, self.width() - 360), 34),
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          tr("graveyard.title"))
         painter.setFont(QFont("Segoe UI", 9))
-        painter.setPen(QColor("#c2d3df"))
+        painter.setPen(QColor("#aeb8c2"))
         painter.drawText(QRect(38, 66, max(160, self.width() - 360), 25),
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          self._summary)
@@ -1110,13 +1209,18 @@ class GraveyardCanvas(QWidget):
                 if pixmap.width() == card_w and pixmap.height() == card_h:
                     painter.drawPixmap(rect.topLeft(), pixmap)
                 else:
-                    painter.drawPixmap(
-                        rect,
-                        pixmap.scaled(
+                    cache_key = (member_id, card_w, card_h, pixmap.cacheKey())
+                    scaled = self._scaled_card_cache.get(cache_key)
+                    if scaled is None:
+                        scaled = pixmap.scaled(
                             rect.size(), Qt.AspectRatioMode.IgnoreAspectRatio,
                             Qt.TransformationMode.SmoothTransformation,
-                        ),
-                    )
+                        )
+                        self._scaled_card_cache[cache_key] = scaled
+                        if len(self._scaled_card_cache) > 256:
+                            self._scaled_card_cache.clear()
+                            self._scaled_card_cache[cache_key] = scaled
+                    painter.drawPixmap(rect.topLeft(), scaled)
                 if member_id == self._hover_member_id:
                     painter.setPen(QPen(QColor(216, 181, 105, 185), 1))
                     painter.drawRoundedRect(rect.adjusted(1, 1, -2, -2), 4, 4)
@@ -1215,6 +1319,31 @@ class GraveyardView(QWidget):
 
         self.zoom_bar = QFrame(self)
         self.zoom_bar.setObjectName("graveZoomBar")
+        self.zoom_bar.setStyleSheet("""
+            QFrame#graveZoomBar {
+                background:#151e25;border:1px solid #80643f;border-radius:6px;
+            }
+            QFrame#graveZoomBar QLabel {background:transparent;border:none;color:#e1c183;}
+            QFrame#graveZoomBar QPushButton {
+                background:#202a33;color:#f0dfbf;border:1px solid #584832;
+                border-radius:4px;padding:0;font-weight:700;
+            }
+            QFrame#graveZoomBar QPushButton:hover {background:#302b22;border-color:#c7a265;}
+            QFrame#graveZoomBar QPushButton:pressed {background:#584832;}
+            QFrame#graveZoomBar QSlider::groove:horizontal {
+                height:5px;background:#28323b;border:1px solid #584832;border-radius:2px;
+            }
+            QFrame#graveZoomBar QSlider::sub-page:horizontal {
+                background:#80643f;border-radius:2px;
+            }
+            QFrame#graveZoomBar QSlider::handle:horizontal {
+                width:14px;margin:-5px 0;background:#e1c183;
+                border:1px solid #c7a265;border-radius:7px;
+            }
+            QFrame#graveZoomBar QSlider::handle:horizontal:hover {
+                background:#f5dfb1;border-color:#e1c183;
+            }
+        """)
         self.zoom_bar.setFixedSize(300, 46)
         row = QHBoxLayout(self.zoom_bar)
         row.setContentsMargins(8, 6, 8, 6)
@@ -1227,10 +1356,10 @@ class GraveyardView(QWidget):
         minus.setFixedSize(30, 30)
         plus.setFixedSize(30, 30)
         self.slider = QSlider(Qt.Orientation.Horizontal)
-        self.slider.setRange(60, 140)
+        self.slider.setRange(40, 140)
         self.slider.setSingleStep(5)
         self.slider.setPageStep(10)
-        self.slider.setValue(max(60, min(140, int(zoom_percent))))
+        self.slider.setValue(max(40, min(140, int(zoom_percent))))
         self.slider.setToolTip(tr("graveyard.view_tooltip"))
         self.value_label = QLabel(f"{self.slider.value()} %")
         self.value_label.setMinimumWidth(48)
@@ -1259,7 +1388,32 @@ class GraveyardView(QWidget):
 
 
 
-class MemberEditDelegate(QStyledItemDelegate):
+class ClassColorDelegate(QStyledItemDelegate):
+    """Keep canonical class colors visible, including selected menu entries."""
+
+    def initStyleOption(self, option, index):  # noqa: N802
+        super().initStyleOption(option, index)
+        color = CLASS_COLORS.get(str(index.data() or ""))
+        if color:
+            for role in (QPalette.ColorRole.Text, QPalette.ColorRole.HighlightedText):
+                option.palette.setColor(role, QColor(color))
+
+
+class ClassComboBox(QComboBox):
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setItemDelegate(ClassColorDelegate(self))
+        self.currentTextChanged.connect(self.refresh_class_color)
+
+    def refresh_class_color(self, *_args) -> None:
+        color = CLASS_COLORS.get(self.currentText(), TEXT)
+        self.setStyleSheet(f"QComboBox {{ color:{color}; }}")
+        for index in range(self.count()):
+            self.setItemData(index, QColor(CLASS_COLORS.get(self.itemText(index), TEXT)),
+                             Qt.ItemDataRole.ForegroundRole)
+
+
+class MemberEditDelegate(ClassColorDelegate):
     """Excel-like editors for the editable member table columns."""
 
     EDITOR_MIN_WIDTHS = {
@@ -1280,7 +1434,7 @@ class MemberEditDelegate(QStyledItemDelegate):
             editor.setMinimumHeight(32)
             return editor
         if column in {1, 2, 3, 4, 5, 6, 7}:
-            combo = QComboBox(parent)
+            combo = ClassComboBox(parent) if column == 2 else QComboBox(parent)
             combo.setMinimumHeight(32)
             if column == 1:
                 combo.addItems([tr("common.not_set"), *race_display_values()])
@@ -1360,12 +1514,31 @@ class RaidMatrixStatusDelegate(QStyledItemDelegate):
             str(index.data(Qt.ItemDataRole.DisplayRole) or ""),
         )
         if option.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_HasFocus):
-            painter.setPen(QPen(QColor("#d9e8f5"), 2))
+            painter.setPen(QPen(QColor(GOLD_BRIGHT), 2))
             painter.drawRect(option.rect.adjusted(1, 1, -2, -2))
         elif option.state & QStyle.StateFlag.State_MouseOver:
-            painter.setPen(QPen(QColor("#9fb1c2"), 1))
+            painter.setPen(QPen(QColor(GOLD), 1))
             painter.drawRect(option.rect.adjusted(0, 0, -1, -1))
         painter.restore()
+
+
+class OptionalIsoDateItem(QTableWidgetItem):
+    """Sort ISO dates chronologically while keeping a missing marker after dates."""
+
+    SORT_ROLE = int(Qt.ItemDataRole.UserRole) + 1
+
+    def __init__(self, value: str) -> None:
+        super().__init__(value)
+        self.setData(self.SORT_ROLE, value if value != "–" else "")
+
+    def __lt__(self, other: QTableWidgetItem) -> bool:
+        left = str(self.data(self.SORT_ROLE) or "")
+        right = str(other.data(self.SORT_ROLE) or "")
+        if not left:
+            return False if right else super().__lt__(other)
+        if not right:
+            return True
+        return left < right
 
 
 class MemberTable(QTableWidget):
@@ -1373,8 +1546,11 @@ class MemberTable(QTableWidget):
 
     COLUMNS = (
         "name", "race", "class", "spec", "character_type", "raid_role",
-        "gear", "raid_status", "last_checked",
+        "gear", "raid_status", "last_checked", "last_raid", "assigned_main",
     )
+    DEFAULT_COLUMN_WIDTHS = (260, 140, 145, 165, 145, 145, 120, 145, 125, 125, 170)
+    DEFAULT_COLUMN_ORDER = ("name", "race", "class", "spec", "raid_role", "gear",
+                            "raid_status", "last_checked", "last_raid", "character_type", "assigned_main")
     paste_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -1382,7 +1558,7 @@ class MemberTable(QTableWidget):
         self.setHorizontalHeaderLabels([
             tr("common.character"), tr("checker.race"), tr("common.class"), tr("common.spec"),
             tr("checker.table_main_twink"), tr("checker.table_raid_role"), tr("gear.label"), tr("raid_status.label"),
-            tr("checker.last_checked"),
+            tr("checker.last_checked"), tr("checker.last_raid"), tr("checker.table_assigned_main"),
         ])
         self.setAlternatingRowColors(True)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
@@ -1396,29 +1572,65 @@ class MemberTable(QTableWidget):
         self.setShowGrid(False)
         self.verticalHeader().setVisible(False)
         header = self.horizontalHeader()
+        header.setSectionsMovable(True)
         header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for column in range(1, len(self.COLUMNS)):
+        for column in range(len(self.COLUMNS)):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
-        header.setMinimumSectionSize(110)
-        self.setColumnWidth(1, 170)
-        self.setColumnWidth(2, 150)
-        self.setColumnWidth(3, 185)
-        self.setColumnWidth(4, 165)
-        self.setColumnWidth(5, 170)
-        self.setColumnWidth(6, 150)
-        self.setColumnWidth(7, 155)
-        self.setColumnWidth(8, 125)
+        header.setMinimumSectionSize(70)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.apply_column_widths(None)
+        self.apply_column_order(None)
         self.verticalHeader().setDefaultSectionSize(40)
         self.setSortingEnabled(True)
-        self.setToolTip(tr("checker.table_help"))
+        self.horizontalHeaderItem(0).setToolTip(tr("checker.table_help"))
+
+    @classmethod
+    def normalized_column_widths(cls, stored: object) -> tuple[int, ...]:
+        if isinstance(stored, list) and len(stored) == len(cls.DEFAULT_COLUMN_WIDTHS) - 1:
+            stored = stored + [cls.DEFAULT_COLUMN_WIDTHS[-1]]
+        if not isinstance(stored, list) or len(stored) != len(cls.DEFAULT_COLUMN_WIDTHS):
+            return cls.DEFAULT_COLUMN_WIDTHS
+        widths: list[int] = []
+        for raw in stored:
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                return cls.DEFAULT_COLUMN_WIDTHS
+            width = int(raw)
+            if not 70 <= width <= 2000:
+                return cls.DEFAULT_COLUMN_WIDTHS
+            widths.append(width)
+        return tuple(widths)
+
+    def apply_column_widths(self, stored: object) -> None:
+        for column, width in enumerate(self.normalized_column_widths(stored)):
+            self.setColumnWidth(column, width)
+
+    def apply_column_order(self, stored: object) -> None:
+        order = self.DEFAULT_COLUMN_ORDER
+        if (isinstance(stored, list) and len(stored) == len(self.COLUMNS)
+                and all(isinstance(key, str) for key in stored)
+                and set(stored) == set(self.COLUMNS)):
+            order = stored
+        header = self.horizontalHeader()
+        for visual, key in enumerate(order):
+            header.moveSection(header.visualIndex(self.COLUMNS.index(key)), visual)
+
+    def column_order(self) -> list[str]:
+        header = self.horizontalHeader()
+        return [self.COLUMNS[header.logicalIndex(visual)] for visual in range(self.columnCount())]
+
+    def column_widths(self) -> list[int]:
+        return [self.columnWidth(column) for column in range(self.columnCount())]
 
     def keyPressEvent(self, event):  # noqa: N802
         if event.matches(QKeySequence.StandardKey.Copy):
             indexes = self.selectedIndexes()
             if indexes:
                 rows = range(min(index.row() for index in indexes), max(index.row() for index in indexes) + 1)
-                columns = range(min(index.column() for index in indexes), max(index.column() for index in indexes) + 1)
+                header = self.horizontalHeader()
+                visual_columns = [header.visualIndex(index.column()) for index in indexes]
+                columns = [header.logicalIndex(visual) for visual in
+                           range(min(visual_columns), max(visual_columns) + 1)]
                 QApplication.clipboard().setText("\n".join(
                     "\t".join(self.item(row, col).text() if self.item(row, col) else "" for col in columns)
                     for row in rows
@@ -1430,6 +1642,27 @@ class MemberTable(QTableWidget):
             event.accept()
             return
         super().keyPressEvent(event)
+
+
+def latest_raid_dates_by_member_id(
+    raids: Iterable[object], attendance: Iterable[object],
+) -> dict[str, str]:
+    """Return the latest recorded present/bench raid date for each exact member ID."""
+    raid_dates = {
+        str(getattr(raid, "id", "")): str(getattr(raid, "date", "") or "")
+        for raid in raids
+        if str(getattr(raid, "status", "")) == "recorded"
+        and str(getattr(raid, "date", "") or "")
+    }
+    latest: dict[str, str] = {}
+    for entry in attendance:
+        if str(getattr(entry, "status", "")) not in ATTENDANCE_STATUSES:
+            continue
+        member_id = str(getattr(entry, "memberId", "") or "")
+        raid_date = raid_dates.get(str(getattr(entry, "raidId", "") or ""), "")
+        if member_id and raid_date and raid_date > latest.get(member_id, ""):
+            latest[member_id] = raid_date
+    return latest
 
 
 class CopyableReadOnlyTable(QTableWidget):
@@ -1560,6 +1793,308 @@ class RosterCard(ClickableFrame):
 
 
 
+class RosterPortraitLabel(CoverImageLabel):
+    """Portrait that fills the exact opening of an optional reward frame."""
+
+    def __init__(self, placeholder: str, parent: QWidget | None = None) -> None:
+        super().__init__(placeholder, parent)
+        self._reward_frame = QPixmap()
+        self._reward_opening = None
+
+    def set_frame(self, path: Path | None, opening: FrameOpeningRect | None) -> None:
+        self._reward_frame = QPixmap(str(path)) if path and path.is_file() else QPixmap()
+        self._reward_opening = opening
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        portrait_rect = self.contentsRect()
+        painter.fillRect(portrait_rect, QColor("#10171d"))
+        frame = QPixmap()
+        frame_rect = QRect()
+        if not self._reward_frame.isNull() and self._reward_opening is not None:
+            frame = self._reward_frame.scaled(
+                portrait_rect.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            frame_rect = QRect(QPoint(0, 0), frame.size())
+            frame_rect.moveCenter(portrait_rect.center())
+            scale = frame.width() / self._reward_frame.width()
+            opening = self._reward_opening
+            portrait_rect = QRect(
+                frame_rect.x() + round(opening.x * scale),
+                frame_rect.y() + round(opening.y * scale),
+                round(opening.width * scale), round(opening.height * scale),
+            )
+        if not self._source.isNull():
+            scaled = self._source.scaled(
+                portrait_rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            source_rect = QRect(
+                max(0, (scaled.width() - portrait_rect.width()) // 2),
+                max(0, (scaled.height() - portrait_rect.height()) // 2),
+                portrait_rect.width(),
+                portrait_rect.height(),
+            )
+            painter.drawPixmap(portrait_rect, scaled, source_rect)
+        else:
+            painter.setPen(QColor("#a9b1b9"))
+            painter.drawText(
+                portrait_rect.adjusted(6, 6, -6, -6),
+                Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, self._placeholder,
+            )
+        if not frame.isNull():
+            painter.drawPixmap(frame_rect, frame)
+        painter.end()
+
+
+
+class ManagementPortraitLabel(RosterPortraitLabel):
+    """Contain the complete portrait inside an invisible fixed layout surface."""
+
+    def __init__(self, placeholder: str, parent: QWidget | None = None) -> None:
+        super().__init__(placeholder, parent)
+        self.setStyleSheet("background:transparent;border:none;padding:0;")
+
+    def frame_geometry(self) -> tuple[QPixmap, QRect, QRect]:
+        area = self.contentsRect()
+        frame = QPixmap()
+        frame_rect = QRect()
+        if not self._reward_frame.isNull() and self._reward_opening is not None:
+            frame = self._reward_frame.scaled(
+                area.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            frame_rect = QRect(QPoint(0, 0), frame.size())
+            frame_rect.moveCenter(area.center())
+            scale_x = frame.width() / self._reward_frame.width()
+            scale_y = frame.height() / self._reward_frame.height()
+            opening = self._reward_opening
+            # Round boundaries together so width/height cannot extend past an edge.
+            left = round(opening.x * scale_x)
+            top = round(opening.y * scale_y)
+            right = round((opening.x + opening.width) * scale_x)
+            bottom = round((opening.y + opening.height) * scale_y)
+            area = QRect(frame_rect.x() + left, frame_rect.y() + top,
+                         right - left, bottom - top).intersected(frame_rect)
+        return frame, frame_rect, area
+
+    def portrait_target_rect(self, area: QRect) -> QRect:
+        size = self._source.size().scaled(area.size(), Qt.AspectRatioMode.KeepAspectRatio)
+        target = QRect(QPoint(0, 0), size)
+        target.moveCenter(area.center())
+        return target
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        frame, frame_rect, area = self.frame_geometry()
+        if not self._source.isNull():
+            target = self.portrait_target_rect(area)
+            painter.save()
+            painter.setClipRect(area)
+            painter.drawPixmap(target, self._source)
+            painter.restore()
+        else:
+            painter.setPen(QColor("#a9b1b9"))
+            painter.drawText(area, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                             self._placeholder)
+        if not frame.isNull():
+            painter.drawPixmap(frame_rect, frame)
+        painter.end()
+
+
+class ManagementPortraitContainer(RewardPortraitContainer):
+    """Keep the detail layout fixed with or without a decorative frame."""
+
+    def _apply_geometry(self) -> None:
+        self.setStyleSheet("background:transparent;border:none;")
+        self.setFixedSize(self._plain_portrait_size)
+        self.portrait.setFixedSize(self._plain_portrait_size)
+        self.portrait.move(0, 0)
+        self.portrait._reward_frame = self._frame_source
+        self.portrait._reward_opening = self._frame_opening
+        self._frame.hide()
+        self.portrait.update()
+        self._apply_badge_geometry()
+
+
+def set_roster_status(label: QLabel, role: str) -> None:
+    """Only presentation; callers supply the existing status meaning."""
+    colors = {
+        "positive": ("#203d2c", "#6e9c78", "#e0eee1"),
+        "negative": ("#45292e", "#aa6b70", "#f0d9dc"),
+        "warning": ("#46371f", "#af8c50", "#f4e3bc"),
+        "neutral": ("#202a33", "#59636c", "#ccd2d7"),
+    }
+    bg, border, text = colors.get(role, colors["neutral"])
+    label.setProperty("rosterStatus", role)
+    label.setStyleSheet(
+        f"background:{bg};color:{text};border:1px solid {border};"
+        "border-radius:7px;padding:3px 7px;font-size:9pt;"
+    )
+
+
+class RosterRoleIcon(QWidget):
+    """Small, monochrome role marks, independent of platform emoji fonts."""
+
+    def __init__(self, role: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.role = role
+        self.setFixedSize(26, 26)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor("#c7a265"), 2))
+        if self.role == "tank":
+            path = QPainterPath()
+            path.moveTo(5, 5)
+            path.lineTo(21, 5)
+            path.lineTo(20, 15)
+            path.quadTo(17, 20, 13, 23)
+            path.quadTo(9, 20, 6, 15)
+            path.closeSubpath()
+            painter.drawPath(path)
+            painter.drawLine(13, 7, 13, 19)
+        elif self.role == "healer":
+            painter.drawEllipse(4, 4, 18, 18)
+            painter.drawLine(13, 7, 13, 19)
+            painter.drawLine(7, 13, 19, 13)
+        elif self.role == "dps":
+            painter.drawLine(5, 5, 21, 21)
+            painter.drawLine(21, 5, 5, 21)
+            painter.drawLine(4, 15, 11, 22)
+            painter.drawLine(15, 22, 22, 15)
+        else:
+            painter.drawEllipse(7, 4, 12, 12)
+            painter.drawLine(13, 19, 13, 22)
+        painter.end()
+
+
+class RosterDraftCard(ClickableFrame):
+    BASE_CARD_WIDTH = 194
+    BASE_PORTRAIT_WIDTH = 160
+    BASE_PORTRAIT_HEIGHT = 216
+    MIN_CARD_WIDTH = 166
+    MIN_PORTRAIT_WIDTH = 108
+    MIN_PORTRAIT_HEIGHT = 112
+
+    def __init__(
+        self, model: GuildModel, member: Member, zoom_percent: int,
+        rank_path: Path | None = None,
+    ) -> None:
+        super().__init__(member.id)
+        self.card_width, portrait_width, portrait_height = self.metrics_for_zoom(zoom_percent)
+        self.setFixedWidth(self.card_width)
+        self.setObjectName("rosterDraftCard")
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setProperty("selected", False)
+        self.setStyleSheet("""
+            QFrame#rosterDraftCard {
+                background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1c2831,stop:1 #131a20);
+                border:2px solid #514736;border-radius:5px;
+            }
+            QFrame#rosterDraftCard:hover {border-color:#ae8245;background:#263038;}
+            QFrame#rosterDraftCard[selected="true"] {border-color:#e8c37c;background:#352c20;}
+            QFrame#rosterDraftCard[selected="true"]:hover {border-color:#ffe0a0;}
+            QLabel {background:transparent;border:none;}
+        """)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 6, 6, 8)
+        layout.setSpacing(5)
+        self.portrait = CoverImageLabel(tr("checker.missing_portrait"))
+        self.portrait.setFixedSize(portrait_width, portrait_height)
+        self.portrait.set_source(member_portrait_path(model, member))
+        self.portrait.clicked.connect(lambda: self.clicked.emit(member.id))
+        layout.addWidget(self.portrait, 0, Qt.AlignmentFlag.AlignHCenter)
+        nameplate = QWidget()
+        nameplate.setStyleSheet("background:#211c17;border:none;")
+        name_row = QHBoxLayout(nameplate)
+        name_row.setContentsMargins(4, 3, 4, 3)
+        name_row.setSpacing(4)
+        name_row.addStretch(1)
+        self.rank_icon = QLabel(nameplate)
+        self.rank_icon.setFixedSize(28, 28)
+        rank = QPixmap(str(rank_path)) if rank_path and rank_path.is_file() else QPixmap()
+        if not rank.isNull():
+            self.rank_icon.setPixmap(rank.scaled(
+                28, 28, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
+            name_row.addWidget(self.rank_icon)
+        else:
+            self.rank_icon.hide()
+        self.name_label = QLabel(member.name)
+        self.name_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.name_label.setWordWrap(True)
+        self.name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.name_label.setMaximumWidth(max(80, self.card_width - 52))
+        self.name_label.setToolTip(member.name)
+        self.name_label.setStyleSheet("color:#f5e2ba;font-size:11pt;font-weight:700;")
+        name_row.addWidget(self.name_label)
+        name_row.addStretch(1)
+        layout.addWidget(nameplate)
+        self.details_label = QLabel(
+            " · ".join(value for value in (member.className, member.spec) if value) or "–"
+        )
+        self.details_label.setWordWrap(True)
+        self.details_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.details_label.setToolTip(self.details_label.text())
+        self.details_label.setStyleSheet(
+            f"color:{CLASS_COLORS.get(member.className, MUTED)};font-size:9pt;"
+        )
+        layout.addWidget(self.details_label)
+        self.secondary_label = QLabel(
+            f"{character_type_display(member.characterType)} · {raid_role_display(member.raidRole)}"
+        )
+        self.secondary_label.setWordWrap(True)
+        self.secondary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.secondary_label.setStyleSheet("color:#a9b1b9;font-size:9pt;")
+        layout.addWidget(self.secondary_label)
+        self.status_badge = QLabel(raid_status_display(member.raidStatus or ""))
+        self.status_badge.setWordWrap(True)
+        self.status_badge.setMaximumWidth(self.card_width - 16)
+        self.status_badge.setToolTip(tr("roster.column_raid_status"))
+        set_roster_status(self.status_badge,
+                          "positive" if member.raidStatus == "Bereit" else
+                          "negative" if member.raidStatus == "Nicht bereit" else "neutral")
+        layout.addWidget(self.status_badge, 0, Qt.AlignmentFlag.AlignHCenter)
+        # Child labels should not swallow the card's member-ID selection.
+        for label in self.findChildren(QLabel):
+            if label is not self.portrait:
+                label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    @classmethod
+    def metrics_for_zoom(cls, zoom_percent: int) -> tuple[int, int, int]:
+        factor = max(0.40, min(1.40, int(zoom_percent) / 100.0))
+        return (
+            max(cls.MIN_CARD_WIDTH, round(cls.BASE_CARD_WIDTH * factor)),
+            max(cls.MIN_PORTRAIT_WIDTH, round(cls.BASE_PORTRAIT_WIDTH * factor)),
+            max(cls.MIN_PORTRAIT_HEIGHT, round(cls.BASE_PORTRAIT_HEIGHT * factor)),
+        )
+
+    def set_zoom_percent(self, zoom_percent: int) -> None:
+        """Resize this presentation only; member data and selection stay untouched."""
+        card_width, portrait_width, portrait_height = self.metrics_for_zoom(zoom_percent)
+        self.card_width = card_width
+        self.setFixedWidth(card_width)
+        self.portrait.setFixedSize(portrait_width, portrait_height)
+        self.name_label.setMaximumWidth(max(80, card_width - 52))
+        self.status_badge.setMaximumWidth(card_width - 16)
+        self.updateGeometry()
+
+    def set_selected(self, selected: bool) -> None:
+        if bool(self.property("selected")) == selected:
+            return
+        self.setProperty("selected", selected)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
+
+
 class BenchPlayersDialog(QDialog):
     """Small, shared picker for manual bench players of one raid."""
     def __init__(
@@ -1647,13 +2182,9 @@ class RaidPointAdjustmentDialog(QDialog):
         self.table.verticalHeader().setDefaultSectionSize(38)
         header = self.table.horizontalHeader()
         header.setMinimumSectionSize(72)
-        for column in (0, 1, 2, 3):
-            header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
-        self.table.setColumnWidth(4, 116)
-        self.table.setColumnWidth(6, 92)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        for column, width in enumerate((150, 180, 120, 100, 116, 260, 100)):
+            self.table.setColumnWidth(column, width)
         for row, entry in enumerate(self.entries):
             base = base_points_for_status(entry.status)
             current = model.raid_points.adjustments.get(entry.id)
@@ -2047,6 +2578,8 @@ class RaidEditorDialog(QDialog):
 class BulkRaidImportDialog(QDialog):
     """Preview and execute an additive folder import without replacing raids."""
 
+    projectDataChanged = Signal()
+
     IMPORTABLE_STATUSES = {"new", "needs_assignment", "merge"}
     DESELECTED_PATHS_SETTING = "bulk_raid_deselected_paths"
 
@@ -2078,6 +2611,39 @@ class BulkRaidImportDialog(QDialog):
         }
         self._refreshing_table = False
         self.setWindowTitle(tr("raids.bulk_title"))
+        self.setObjectName("bulkRaidImportDialog")
+        self.setStyleSheet(STYLE_SHEET + """
+            QDialog#bulkRaidImportDialog QTableWidget::item:selected {
+                background:#302b22;color:#f5dfb1;
+            }
+            QDialog#bulkRaidImportDialog QHeaderView::section {
+                background:#202830;color:#e1c183;
+                border-right:1px solid #584832;border-bottom:1px solid #80643f;
+            }
+            QDialog#bulkRaidImportDialog QListWidget#bulkParticipantList {
+                background:#11171e;alternate-background-color:#141b23;
+                border:1px solid #394654;selection-background-color:#302b22;
+            }
+            QDialog#bulkRaidImportDialog QListWidget#bulkParticipantList::item {
+                padding:4px 7px;border-bottom:1px solid #202a34;
+            }
+            QDialog#bulkRaidImportDialog QCheckBox::indicator:checked {
+                background:#80643f;border:1px solid #c7a265;
+            }
+            QDialog#bulkRaidImportDialog QTableWidget QComboBox {
+                background:#10161d;color:#e6e2d8;border:1px solid #584832;
+                border-radius:4px;padding:4px 7px;
+            }
+            QDialog#bulkRaidImportDialog QTableWidget QComboBox:focus {
+                border-color:#c7a265;
+            }
+            QDialog#bulkRaidImportDialog QComboBox QAbstractItemView {
+                background:#171e26;selection-background-color:#302b22;
+                selection-color:#f5dfb1;border:1px solid #584832;
+            }
+            QDialog#bulkRaidImportDialog QLineEdit:focus,
+            QDialog#bulkRaidImportDialog QComboBox:focus {border-color:#c7a265;}
+        """)
         self.setMinimumSize(900, 620)
         layout = QVBoxLayout(self)
         intro = QLabel(tr("raids.bulk_preview_help", folder=str(folder)))
@@ -2095,14 +2661,10 @@ class BulkRaidImportDialog(QDialog):
         header = self.table.horizontalHeader()
         header.setSectionsClickable(True)
         header.setSortIndicatorShown(True)
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        for column in (1, 4, 5):
-            header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        header.setMinimumSectionSize(120)
-        self.table.setColumnWidth(2, 190)
-        header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        header.setMinimumSectionSize(40)
+        for column, width in enumerate((42, 112, 190, 350, 82, 150, 125)):
+            self.table.setColumnWidth(column, width)
         self.table.itemChanged.connect(self._selection_changed)
         self.table.cellClicked.connect(self._table_clicked)
         self.table.cellChanged.connect(self._cell_changed)
@@ -2112,6 +2674,8 @@ class BulkRaidImportDialog(QDialog):
         self.participant_title = QLabel()
         layout.addWidget(self.participant_title)
         self.participant_list = QListWidget()
+        self.participant_list.setObjectName("bulkParticipantList")
+        self.participant_list.setAlternatingRowColors(True)
         self.participant_list.setMaximumHeight(180)
         layout.addWidget(self.participant_list)
 
@@ -2219,14 +2783,161 @@ class BulkRaidImportDialog(QDialog):
             "raids.bulk_participants_summary", total=len(participants),
             recognized=recognized, unrecognized=len(participants) - recognized,
         ))
-        for name, known in participants:
+        unresolved_keys = {exact_name_key(name) for name in plan.unknown_names}
+        unresolved = [
+            entry for entry in participants if exact_name_key(entry[0]) in unresolved_keys
+        ]
+        resolved = [
+            entry for entry in participants if exact_name_key(entry[0]) not in unresolved_keys
+        ]
+        for name, known in (*unresolved, *resolved):
             item = QListWidgetItem(name)
             item.setToolTip(
                 tr("raids.bulk_participant_recognized") if known
                 else tr("raids.bulk_participant_unrecognized")
             )
-            item.setForeground(QColor("#a7d8aa") if known else QColor("#e2b66d"))
+            if exact_name_key(name) in unresolved_keys:
+                item.setForeground(QColor("#e1c183"))
+                row_widget = QWidget()
+                row_layout = QHBoxLayout(row_widget)
+                row_layout.setContentsMargins(6, 2, 6, 2)
+                name_label = QLabel(name)
+                name_label.setToolTip(tr("raids.bulk_participant_unrecognized"))
+                name_label.setStyleSheet("color:#e1c183;font-weight:600;")
+                row_layout.addWidget(name_label, 1)
+                character_search = QLineEdit()
+                character_search.setPlaceholderText(tr("raids.bulk_character_search"))
+                character_search.setClearButtonEnabled(True)
+                character_search.setMaximumWidth(190)
+                row_layout.addWidget(character_search)
+                member_combo = QComboBox()
+                member_combo.setMinimumWidth(300)
+                member_combo.addItem(tr("raids.bulk_assign_existing"), "")
+                member_combo.setItemData(
+                    0, "", Qt.ItemDataRole.UserRole + 1,
+                )
+                for member in self._wcl_alias_candidates():
+                    label = " · ".join((
+                        member.name,
+                        character_type_display(member.characterType),
+                        tr(f"life.{member.lifeStatus}"),
+                        member.id,
+                    ))
+                    member_combo.addItem(label, member.id)
+                    member_combo.setItemData(
+                        member_combo.count() - 1, member.name,
+                        Qt.ItemDataRole.UserRole + 1,
+                    )
+                    member_combo.setItemData(
+                        member_combo.count() - 1, label, Qt.ItemDataRole.ToolTipRole,
+                    )
+                source_model = member_combo.model()
+                source_model.setParent(row_widget)
+                proxy = QSortFilterProxyModel(member_combo)
+                proxy.setSourceModel(source_model)
+                proxy.setFilterRole(Qt.ItemDataRole.UserRole + 1)
+                proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+                proxy.setFilterKeyColumn(0)
+                proxy.setDynamicSortFilter(True)
+                member_combo.setModel(proxy)
+                row_layout.addWidget(member_combo, 2)
+                character_search.textChanged.connect(
+                    lambda text, model=proxy, control=member_combo:
+                    self._filter_wcl_character_choices(model, control, text)
+                )
+                self.participant_list.addItem(item)
+                row_widget.adjustSize()
+                item.setSizeHint(row_widget.sizeHint())
+                self.participant_list.setItemWidget(item, row_widget)
+                member_combo.currentIndexChanged.connect(
+                    lambda _index, path=self._source_path_key(plan.source_path),
+                    wcl_name=name, control=member_combo:
+                    self._assign_wcl_alias(path, wcl_name, str(control.currentData() or ""))
+                )
+                continue
+            item.setForeground(QColor("#8ec79a") if known else QColor("#e1c183"))
             self.participant_list.addItem(item)
+
+    def _wcl_alias_candidates(self) -> list[Member]:
+        candidates: list[Member] = []
+        for member in self.model.members:
+            if member.playerId:
+                if (self.model.find_player_by_id(member.playerId) is not None
+                        and member.characterType in {"main", "twink"}):
+                    candidates.append(member)
+            elif (member.lifeStatus == "active"
+                  and member.characterType in {"", "not_set", "main"}):
+                # The existing attendance importer already assigns an active,
+                # exact-name unassigned member to a Main using its memberId.
+                candidates.append(member)
+        def character_sort_key(member: Member) -> tuple[str, str, str]:
+            decomposed = unicodedata.normalize("NFKD", member.name)
+            folded_base = "".join(
+                character for character in decomposed
+                if not unicodedata.combining(character)
+            ).casefold()
+            return folded_base, member.name.casefold(), member.id
+
+        return sorted(candidates, key=character_sort_key)
+
+    @staticmethod
+    def _filter_wcl_character_choices(
+        proxy: QSortFilterProxyModel, combo: QComboBox, text: str,
+    ) -> None:
+        # Filtering only changes visibility; it must never trigger the alias
+        # assignment connected to currentIndexChanged.
+        was_blocked = combo.blockSignals(True)
+        proxy.setFilterFixedString(text.strip())
+        placeholder = combo.findData("")
+        combo.setCurrentIndex(placeholder if not text.strip() else -1)
+        combo.blockSignals(was_blocked)
+
+    def _reanalyze_plan(
+        self, source_path: str, *, refresh: bool = True,
+    ) -> BulkRaidCsvPlan | None:
+        index = next((
+            position for position, plan in enumerate(self.plans)
+            if self._source_path_key(plan.source_path) == source_path
+        ), None)
+        if index is None:
+            return None
+        previous = self.plans[index]
+        refreshed = self.model.analyze_bulk_raid_csv_files((previous.source_path,))
+        if not refreshed:
+            return None
+        plan = refreshed[0]
+        self.plans[index] = plan
+        self._plans_by_source_path[source_path] = plan
+        self._participant_preview[source_path] = self._build_participant_preview(plan)
+        if plan.status not in self.IMPORTABLE_STATUSES:
+            self.selected_paths.discard(source_path)
+        if refresh:
+            self._refresh_view()
+        return plan
+
+    def _reanalyze_plans_for_alias(self, wcl_name: str, selected_path: str = "") -> None:
+        name_key = exact_name_key(wcl_name)
+        affected_paths = [
+            self._source_path_key(plan.source_path) for plan in self.plans
+            if any(exact_name_key(name) == name_key for name in plan.unknown_names)
+        ]
+        if selected_path and selected_path not in affected_paths:
+            affected_paths.insert(0, selected_path)
+        for source_path in affected_paths:
+            self._reanalyze_plan(source_path, refresh=False)
+        if affected_paths:
+            self._refresh_view()
+
+    def _assign_wcl_alias(self, source_path: str, wcl_name: str, member_id: str) -> None:
+        if self._refreshing_table or not member_id:
+            return
+        try:
+            self.model.set_wcl_member_alias(wcl_name, member_id)
+        except Exception as exc:
+            QMessageBox.warning(self, APP_NAME, str(exc))
+            return
+        self.projectDataChanged.emit()
+        self._reanalyze_plans_for_alias(wcl_name, source_path)
 
     def _selection_changed(self, item: QTableWidgetItem) -> None:
         if self._refreshing_table or item.column() != 0:
@@ -2265,15 +2976,16 @@ class BulkRaidImportDialog(QDialog):
         plan = self.plans[index]
         existing = self.model._matching_raid(plan.raid_date, raid_type)
         resolution = self.model.resolve_raid_attendance(plan.names)
-        if resolution.ambiguous_names:
-            status, detail = "invalid", tr("raids.bulk_unresolved", names=", ".join(resolution.ambiguous_names))
-        elif existing is not None:
+        unresolved_names = tuple(dict.fromkeys((
+            *resolution.unknown_names, *resolution.ambiguous_names,
+        )))
+        if existing is not None:
             status = "merge" if plan.report_url and not existing.warcraftLogsUrl else "existing"
             detail = tr("raids.bulk_existing_detail") if status == "existing" else ""
         else:
-            status = "needs_assignment" if resolution.unknown_names else "new"
+            status = "needs_assignment" if unresolved_names else "new"
             detail = (
-                tr("raids.bulk_unresolved", names=", ".join(resolution.unknown_names))
+                tr("raids.bulk_unresolved", names=", ".join(unresolved_names))
                 if status == "needs_assignment" else ""
             )
         self.plans[index] = replace(plan, raid_type=raid_type, status=status, detail=detail)
@@ -2376,16 +3088,21 @@ class BulkRaidImportDialog(QDialog):
                 item = QTableWidgetItem(str(value))
                 if plan.detail:
                     item.setToolTip(plan.detail)
+                if column == 5:
+                    if plan.status in {"new", "merge", "imported"}:
+                        item.setForeground(QColor("#8ec79a"))
+                    elif plan.status == "needs_assignment":
+                        item.setForeground(QColor("#e1c183"))
+                    elif plan.status in {"invalid", "unknown_type", "import_error"}:
+                        item.setForeground(QColor("#f0d9dc"))
+                    else:
+                        item.setForeground(QColor(MUTED))
                 if column == 6 and plan.report_url:
                     item.setToolTip(plan.report_url)
                 self.table.setItem(row, column, item)
             combo = QComboBox(self.table)
             combo.setMinimumWidth(178)
             combo.setMinimumHeight(29)
-            combo.setStyleSheet(
-                "QComboBox { padding: 4px 8px; }"
-                "QComboBox QAbstractItemView { padding: 4px 8px; min-width: 190px; }"
-            )
             combo.addItem(tr("common.not_set"), "")
             for raid_type in RAID_TYPES:
                 combo.addItem(raid_type, raid_type)
@@ -2427,15 +3144,39 @@ class BulkRaidImportDialog(QDialog):
         self, plans: list[BulkRaidCsvPlan],
     ) -> dict[str, tuple[str, str | None]] | None:
         decisions: dict[str, tuple[str, str | None]] = {}
+        resolved_aliases: set[str] = set()
         mains = self._active_mains()
         for plan in plans:
+            if plan.status != "needs_assignment":
+                continue
+            resolution = self.model.resolve_raid_attendance(plan.names)
+            ambiguous_keys = {
+                exact_name_key(name) for name in resolution.ambiguous_names
+            }
             for name in plan.unknown_names:
-                if name in decisions:
+                name_key = exact_name_key(name)
+                if name in decisions or name_key in resolved_aliases:
                     continue
-                dialog = UnknownRaidMemberDialog(self, name, mains)
+                dialog = UnknownRaidMemberDialog(
+                    self, name, mains, bulk_context=True,
+                    existing_members=self._wcl_alias_candidates(),
+                    allow_create=name_key not in ambiguous_keys,
+                )
                 if dialog.exec() != QDialog.DialogCode.Accepted or dialog.result_value is None:
                     return None
-                decisions[name] = dialog.result_value
+                action, value = dialog.result_value
+                if action == "alias":
+                    try:
+                        self.model.set_wcl_member_alias(name, value)
+                    except Exception as exc:
+                        QMessageBox.warning(self, APP_NAME, str(exc))
+                        return None
+                    self.projectDataChanged.emit()
+                    path = self._source_path_key(plan.source_path)
+                    self._reanalyze_plans_for_alias(name, path)
+                    resolved_aliases.add(name_key)
+                else:
+                    decisions[name] = (action, value)
         return decisions
 
     def _import_new(self) -> None:
@@ -2489,8 +3230,11 @@ class ClmRaidHistoryPreviewDialog(QDialog):
         ])
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.verticalHeader().setVisible(False)
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        history_header = table.horizontalHeader()
+        history_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        history_header.setMinimumSectionSize(60)
+        for column, width in enumerate((110, 250, 120, 150, 170, 100, 115, 120, 105)):
+            table.setColumnWidth(column, width)
         for history in preview.projection.raids:
             matched = next((
                 raid for raid in model.raids
@@ -2540,7 +3284,10 @@ class ClmRaidHistoryPreviewDialog(QDialog):
 
 
 class UnknownRaidMemberDialog(QDialog):
-    def __init__(self, parent: QWidget, name: str, mains: list[tuple[str, str]]) -> None:
+    def __init__(self, parent: QWidget, name: str, mains: list[tuple[str, str]], *,
+                 bulk_context: bool = False,
+                 existing_members: list[Member] | None = None,
+                 allow_create: bool = True) -> None:
         super().__init__(parent)
         self.name = name
         self.result_value: tuple[str, str | None] | None = None
@@ -2553,29 +3300,68 @@ class UnknownRaidMemberDialog(QDialog):
         self.main_combo = QComboBox()
         for label, member_id in mains:
             self.main_combo.addItem(label, member_id)
-        layout.addWidget(QLabel(tr("raids.twink_player")))
-        layout.addWidget(self.main_combo)
+        if allow_create or not bulk_context:
+            layout.addWidget(QLabel(tr("raids.twink_player")))
+            layout.addWidget(self.main_combo)
+        self.member_combo: QComboBox | None = None
+        if bulk_context:
+            self.member_combo = QComboBox()
+            self.member_combo.addItem(tr("raids.bulk_assign_existing"), "")
+            for member in existing_members or ():
+                label = " · ".join((
+                    member.name,
+                    character_type_display(member.characterType),
+                    tr(f"life.{member.lifeStatus}"),
+                    member.id,
+                ))
+                self.member_combo.addItem(label, member.id)
+            layout.addWidget(self.member_combo)
         row = QHBoxLayout()
-        main_button = set_button_role(QPushButton(tr("raids.add_as_main")), primary=True)
-        twink_button = QPushButton(tr("raids.assign_as_twink"))
-        inactive_button = QPushButton(tr("raid_clm_admin.history_action_inactive"))
-        dead_button = QPushButton(tr("raid_clm_admin.history_action_dead"))
-        dead_twink_button = QPushButton(tr("raid_clm_admin.history_action_dead_twink"))
-        discard_button = set_button_role(QPushButton(tr("raid_clm_admin.history_action_irrelevant")), danger=True)
-        twink_button.setEnabled(bool(mains))
-        dead_twink_button.setEnabled(bool(mains))
-        main_button.clicked.connect(lambda: self._finish("main", None))
-        twink_button.clicked.connect(lambda: self._finish("twink", self.main_combo.currentData()))
-        inactive_button.clicked.connect(lambda: self._finish("inactive", None))
-        dead_button.clicked.connect(lambda: self._finish("dead", None))
-        dead_twink_button.clicked.connect(lambda: self._finish("dead_twink", self.main_combo.currentData()))
-        discard_button.clicked.connect(lambda: self._finish("irrelevant", None))
-        row.addWidget(main_button)
-        row.addWidget(twink_button)
-        row.addWidget(inactive_button)
-        row.addWidget(dead_button)
-        row.addWidget(dead_twink_button)
-        row.addWidget(discard_button)
+        if allow_create:
+            main_button = set_button_role(QPushButton(tr("raids.add_as_main")), primary=True)
+            twink_button = QPushButton(tr("raids.assign_as_twink"))
+            twink_button.setEnabled(bool(mains))
+            main_button.clicked.connect(lambda: self._finish("main", None))
+            twink_button.clicked.connect(lambda: self._finish("twink", self.main_combo.currentData()))
+            row.addWidget(main_button)
+            row.addWidget(twink_button)
+        if bulk_context:
+            alias_button = QPushButton(tr("raids.bulk_assign_existing"))
+            alias_button.setEnabled(bool(existing_members) and bool(self.member_combo.currentData()))
+            alias_button.clicked.connect(
+                lambda: self._finish("alias", self.member_combo.currentData())
+            )
+            if self.member_combo is not None:
+                self.member_combo.currentIndexChanged.connect(
+                    lambda _index: alias_button.setEnabled(bool(self.member_combo.currentData()))
+                )
+            row.addWidget(alias_button)
+        elif allow_create:
+            inactive_button = QPushButton(tr("raid_clm_admin.history_action_inactive"))
+            dead_button = QPushButton(tr("raid_clm_admin.history_action_dead"))
+            dead_twink_button = QPushButton(tr("raid_clm_admin.history_action_dead_twink"))
+            dead_twink_button.setEnabled(bool(mains))
+            inactive_button.clicked.connect(lambda: self._finish("inactive", None))
+            dead_button.clicked.connect(lambda: self._finish("dead", None))
+            dead_twink_button.clicked.connect(
+                lambda: self._finish("dead_twink", self.main_combo.currentData())
+            )
+            row.addWidget(inactive_button)
+            row.addWidget(dead_button)
+            row.addWidget(dead_twink_button)
+        if allow_create:
+            discard_button = set_button_role(QPushButton(
+                tr("raids.bulk_discard_unknown") if bulk_context
+                else tr("raid_clm_admin.history_action_irrelevant")
+            ), danger=True)
+            discard_button.clicked.connect(
+                lambda: self._finish("discard" if bulk_context else "irrelevant", None)
+            )
+            row.addWidget(discard_button)
+        if bulk_context:
+            cancel_button = QPushButton(tr("common.cancel"))
+            cancel_button.clicked.connect(self.reject)
+            row.addWidget(cancel_button)
         layout.addLayout(row)
 
     def _finish(self, action: str, member_id: str | None) -> None:
@@ -2598,6 +3384,20 @@ class PlayerProfilePage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
+        scroll.setObjectName("profileLegacy")
+        scroll.setStyleSheet("""
+            QWidget#profileLegacy QTableWidget {
+                selection-background-color:#31485e;selection-color:white;
+            }
+            QWidget#profileLegacy QTableWidget::item:selected {background:#31485e;color:white;}
+            QWidget#profileLegacy QHeaderView::section {
+                background:#1d2630;color:#dce3e9;
+                border-right:1px solid #303b47;border-bottom:1px solid #424d59;
+            }
+            QWidget#profileLegacy QComboBox QAbstractItemView {
+                selection-background-color:#354b61;selection-color:white;
+            }
+        """)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         content = QWidget(scroll)
         layout = QVBoxLayout(content)
@@ -2705,6 +3505,7 @@ class PlayerProfilePage(QWidget):
         self.character_raid_title.setObjectName("subtle")
         self.character_raid_title.setStyleSheet("font-weight:700;")
         self.character_raid_table = QTableWidget(0, 4)
+        self.character_raid_table.setObjectName("legacyProfileRaidTable")
         self.character_raid_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.character_raid_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows,
@@ -2716,8 +3517,11 @@ class PlayerProfilePage(QWidget):
         self.character_raid_table.verticalHeader().setVisible(False)
         self.character_raid_table.verticalHeader().setDefaultSectionSize(26)
         self.character_raid_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeMode.Stretch,
+            QHeaderView.ResizeMode.Interactive,
         )
+        self.character_raid_table.horizontalHeader().setMinimumSectionSize(56)
+        for column, width in enumerate((110, 280, 130, 100)):
+            self.character_raid_table.setColumnWidth(column, width)
         self.character_raid_table.setMaximumHeight(280)
         self.character_raid_table.setMinimumHeight(180)
         character_info = QHBoxLayout()
@@ -2737,7 +3541,42 @@ class PlayerProfilePage(QWidget):
         layout.addWidget(self.player_card)
         layout.addStretch(1)
         scroll.setWidget(content)
-        outer.addWidget(scroll)
+        variants = QHBoxLayout()
+        variants.setContentsMargins(18, 8, 18, 0)
+        self.variant_buttons = QButtonGroup(self)
+        self.variant_buttons.setExclusive(True)
+        for display_index, key in enumerate(("variant_draft", "variant_classic")):
+            button = QPushButton(tr(f"roster.{key}"))
+            button.setObjectName("viewSwitchButton")
+            button.setCheckable(True)
+            stack_index = 1 - display_index
+            button.setChecked(display_index == 0)
+            self.variant_buttons.addButton(button, stack_index)
+            variants.addWidget(button)
+        variants.addStretch(1)
+        outer.addLayout(variants)
+        self.variant_stack = QStackedWidget()
+        self.variant_stack.addWidget(scroll)
+        self.draft_page = PlayerProfileDraftPage()
+        self.variant_stack.addWidget(self.draft_page)
+        self.variant_stack.setCurrentIndex(1)
+        self.variant_buttons.idClicked.connect(self._switch_profile_variant)
+        outer.addWidget(self.variant_stack)
+
+    def _switch_profile_variant(self, index: int) -> None:
+        views = (self, self.draft_page)
+        source = views[self.variant_stack.currentIndex()].character_raid_table
+        target = views[index].character_raid_table
+        current = source.currentItem()
+        raid_id = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
+        self.variant_stack.setCurrentIndex(index)
+        if raid_id:
+            for row in range(target.rowCount()):
+                item = target.item(row, 0)
+                if item is not None and item.data(Qt.ItemDataRole.UserRole) == raid_id:
+                    target.setCurrentCell(row, 0)
+                    target.scrollToItem(item)
+                    break
 
     @staticmethod
     def _build_metrics(
@@ -2842,10 +3681,290 @@ class PlayerProfilePage(QWidget):
         self.character_combo.blockSignals(False)
 
 
+
+class PlayerProfileDraftPage(PlayerProfilePage):
+    """Alternative presentation using the original page's view contract and signals."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        QWidget.__init__(self, parent)
+        self.setObjectName("profileDraft")
+        self.setStyleSheet("""
+            QWidget#profileDraft {background:#11181f;}
+            QWidget#profileDraft QWidget {background:transparent;}
+            QWidget#profileDraft QFrame[card="true"] {
+                background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #17212a,stop:1 #11181f);
+                border:1px solid #80643f;border-radius:6px;
+            }
+            QWidget#profileDraft QLabel {border:none;}
+            QWidget#profileDraft QLabel#sectionTitle {color:#e1c183;font-size:13pt;}
+            QWidget#profileDraft QLabel#memberName {color:#f5dfb1;font-size:23pt;font-weight:700;}
+            QWidget#profileDraft QComboBox {background:#11181f;border:1px solid #584832;}
+            QWidget#profileDraft QComboBox QAbstractItemView {background:#17212a;}
+            QWidget#profileDraft QPushButton[family="true"] {
+                background:#151e25;border:1px solid #584832;text-align:left;
+                padding:12px 16px;min-width:160px;
+            }
+            QWidget#profileDraft QPushButton[family="true"]:hover {background:#202a33;border-color:#c7a265;}
+            QWidget#profileDraft QPushButton[family="true"]:checked {background:#302b22;border:2px solid #c7a265;}
+            QWidget#profileDraft QTableWidget {
+                background:#11181f;alternate-background-color:#17212a;border:1px solid #584832;
+                selection-background-color:#302b22;selection-color:#f5dfb1;
+            }
+            QWidget#profileDraft QTableWidget::item:selected {background:#302b22;color:#f5dfb1;}
+            QWidget#profileDraft QHeaderView::section {background:#202830;color:#e1c183;border-color:#584832;}
+        """)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        body = QVBoxLayout(content)
+        body.setContentsMargins(18, 14, 18, 20)
+        body.setSpacing(16)
+        nav = QHBoxLayout()
+        self.back_button = QPushButton(tr("player_profile.back_to_roster"))
+        self.back_button.clicked.connect(self.backRequested.emit)
+        nav.addWidget(self.back_button)
+        nav.addStretch(1)
+        nav.addWidget(QLabel(tr("player_profile.select_player")))
+        self.player_combo = QComboBox()
+        self.player_combo.setMinimumWidth(230)
+        self.player_combo.currentIndexChanged.connect(self._player_changed)
+        nav.addWidget(self.player_combo)
+        body.addLayout(nav)
+
+        hero = QFrame()
+        hero.setProperty("card", True)
+        hero_body = QVBoxLayout(hero)
+        hero_body.setContentsMargins(22, 18, 22, 18)
+        hero_body.setSpacing(14)
+        self.title = QLabel()
+        self.title.setObjectName("memberName")
+        self.title.setWordWrap(True)
+        hero_body.addWidget(self.title)
+        self.main_caption = QLabel()
+        self.main_caption.setObjectName("subtle")
+        hero_body.addWidget(self.main_caption)
+        self.player_metric_labels = {}
+        metrics = QHBoxLayout()
+        for key, caption in (
+            ("player_rank", tr("player_profile.player_rank")),
+            ("eternal_dkp", tr("raid_clm_admin.eternal_dkp")),
+            ("raids", tr("player_profile.raids")),
+            ("attendance", tr("player_profile.attendance")),
+        ):
+            column = QVBoxLayout()
+            label = QLabel(caption)
+            label.setStyleSheet("color:#e1c183;")
+            value = QLabel("–")
+            value.setWordWrap(True)
+            value.setStyleSheet("color:#f5dfb1;font-size:17pt;font-weight:700;")
+            column.addWidget(label)
+            column.addWidget(value)
+            metrics.addLayout(column, 2 if key == "attendance" else 1)
+            self.player_metric_labels[key] = value
+        hero_body.addLayout(metrics)
+        body.addWidget(hero)
+
+        family_title = QLabel(tr("player_profile.character_family"))
+        family_title.setObjectName("sectionTitle")
+        family_header = QHBoxLayout()
+        family_header.addWidget(family_title)
+        body.addLayout(family_header)
+        family_scroll = QScrollArea()
+        family_scroll.setWidgetResizable(True)
+        family_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        family_scroll.setFixedHeight(114)
+        family = QWidget()
+        self.family_layout = QHBoxLayout(family)
+        self.family_layout.setContentsMargins(0, 0, 0, 4)
+        self.family_layout.setSpacing(10)
+        self.family_buttons: dict[str, QPushButton] = {}
+        family_scroll.setWidget(family)
+        body.addWidget(family_scroll)
+
+        card = QFrame()
+        card.setProperty("card", True)
+        selected = QVBoxLayout(card)
+        selected.setContentsMargins(18, 16, 18, 16)
+        navigation = QFrame()
+        navigation.setObjectName("profileCharacterNavigation")
+        navigation.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        navigation.setStyleSheet("""
+            QFrame#profileCharacterNavigation {
+                background:#151e25;border:1px solid #584832;border-radius:5px;
+            }
+            QFrame#profileCharacterNavigation QPushButton {
+                background:transparent;color:#e1c183;border:none;border-radius:3px;padding:0;
+            }
+            QFrame#profileCharacterNavigation QPushButton:hover {background:#302b22;color:#f5dfb1;}
+            QFrame#profileCharacterNavigation QPushButton:pressed {background:#584832;}
+            QFrame#profileCharacterNavigation QPushButton:disabled {color:#59636c;background:transparent;}
+            QFrame#profileCharacterNavigation QComboBox {
+                background:transparent;color:#f0dfbf;border:none;
+                border-left:1px solid #584832;border-right:1px solid #584832;
+                border-radius:0;padding:0 10px;
+            }
+        """)
+        selection = QHBoxLayout(navigation)
+        selection.setContentsMargins(3, 3, 3, 3)
+        selection.setSpacing(0)
+        family_header.addSpacing(14)
+        family_header.addWidget(navigation)
+        family_header.addStretch(1)
+        self.character_previous_button = QPushButton("◀")
+        self.character_previous_button.setToolTip(tr("player_profile.previous_character"))
+        self.character_previous_button.clicked.connect(self.previousCharacterRequested.emit)
+        self.character_next_button = QPushButton("▶")
+        self.character_next_button.setToolTip(tr("player_profile.next_character"))
+        self.character_next_button.clicked.connect(self.nextCharacterRequested.emit)
+        self.character_combo = QComboBox()
+        self.character_combo.setMinimumWidth(250)
+        self.character_combo.setMaximumWidth(320)
+        self.character_combo.setAccessibleName(tr("player_profile.select_character"))
+        for button in (self.character_previous_button, self.character_next_button):
+            button.setFixedWidth(34)
+            button.setAccessibleName(button.toolTip())
+        self.character_combo.currentIndexChanged.connect(self._character_changed)
+        for widget in (self.character_previous_button, self.character_combo, self.character_next_button):
+            widget.setFixedHeight(32)
+            selection.addWidget(widget)
+        detail = QHBoxLayout()
+        detail.setSpacing(16)
+        character_column = QVBoxLayout()
+        character_column.setSpacing(8)
+        caption = QLabel(tr("player_profile.selected_character"))
+        caption.setObjectName("sectionTitle")
+        character_column.addWidget(caption)
+        character_content = QHBoxLayout()
+        character_content.setSpacing(16)
+        detail.addLayout(character_column)
+        self.player_portrait = ManagementPortraitLabel(tr("checker.missing_portrait"))
+        self.player_reward_portrait = ManagementPortraitContainer(self.player_portrait, QSize(180, 260))
+        artwork = QVBoxLayout()
+        artwork.setSpacing(6)
+        artwork.addWidget(self.player_reward_portrait, 0, Qt.AlignmentFlag.AlignTop)
+        info = QWidget()
+        info.setMinimumWidth(245)
+        info.setMaximumWidth(340)
+        identity = QVBoxLayout(info)
+        identity.setContentsMargins(0, 0, 0, 0)
+        identity.setSpacing(7)
+        self.character_name = QLabel("–")
+        self.character_name.setObjectName("memberName")
+        self.character_name.setWordWrap(True)
+        identity.addWidget(self.character_name)
+        self.character_identity_line = QLabel("–")
+        self.character_identity_line.setWordWrap(True)
+        identity.addWidget(self.character_identity_line)
+        status = QHBoxLayout()
+        self.character_type = QLabel("–")
+        self.character_life = QLabel("–")
+        status.addWidget(self.character_type)
+        status.addWidget(self.character_life)
+        status.addStretch(1)
+        identity.addLayout(status)
+        self.character_spec = QLabel("–")
+        spec = QFormLayout()
+        spec.addRow(tr("common.spec"), self.character_spec)
+        identity.addLayout(spec)
+        rank = QHBoxLayout()
+        self.player_rank_icon = QLabel()
+        self.player_rank_icon.setFixedSize(64, 64)
+        self.player_rank_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.character_rank = QLabel("–")
+        self.character_rank.setStyleSheet("font-size:13pt;color:#e1c183;")
+        rank.addStretch(1)
+        rank.addWidget(self.player_rank_icon)
+        rank.addWidget(self.character_rank)
+        rank.addStretch(1)
+        artwork.addStretch(1)
+        character_content.addLayout(artwork)
+        character_content.addWidget(info)
+        character_column.addLayout(character_content)
+        character_column.addLayout(rank)
+        character_column.addStretch(1)
+        self.character_details_form = QFormLayout()
+        self.character_details_form.setVerticalSpacing(7)
+        self.character_details_form.setHorizontalSpacing(12)
+        self.character_metric_labels = {}
+        for key, caption in (
+            ("attendance", tr("player_profile.attendance")),
+            ("raids", tr("player_profile.raids")),
+            ("points", tr("raid_points.title")),
+            ("eternal_dkp", tr("raid_clm_admin.eternal_dkp")),
+            ("streak", tr("player_profile.streak")),
+        ):
+            value = QLabel("–")
+            value.setWordWrap(True)
+            value.setStyleSheet("font-size:10pt;font-weight:600;color:#f0d7a4;")
+            self.character_details_form.addRow(caption, value)
+            self.character_metric_labels[key] = value
+        identity.addLayout(self.character_details_form)
+        identity.addStretch(1)
+        selected.addLayout(detail)
+        body.addWidget(card)
+        body.addStretch(1)
+
+        self.character_raid_title = QLabel(tr("player_profile.raid_list"))
+        self.character_raid_title.setObjectName("sectionTitle")
+        raids = QVBoxLayout()
+        raids.setSpacing(8)
+        raids.addWidget(self.character_raid_title)
+        self.character_raid_table = QTableWidget(0, 4)
+        self.character_raid_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.character_raid_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.character_raid_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.character_raid_table.setAlternatingRowColors(True)
+        self.character_raid_table.verticalHeader().hide()
+        self.character_raid_table.verticalHeader().setDefaultSectionSize(32)
+        self.character_raid_table.setMinimumSize(360, 310)
+        header = self.character_raid_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        header.setMinimumSectionSize(56)
+        for column, width in enumerate((120, 260, 140, 100)):
+            self.character_raid_table.setColumnWidth(column, width)
+        raids.addWidget(self.character_raid_table, 1)
+        detail.addLayout(raids, 1)
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+
+    def set_profile_family(self, profile: PlayerProfileViewModel) -> None:
+        while self.family_layout.count():
+            item = self.family_layout.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+        self.family_buttons.clear()
+        main = next((item for item in profile.characters if item.member_id == profile.current_main_member_id), None)
+        self.main_caption.setText(
+            tr("player_profile.current_main", name=main.name) if main else tr("player_profile.no_active_main")
+        )
+        for character in profile.characters:
+            button = QPushButton("\n".join((
+                character.name,
+                profile_class_display(character.class_name) or tr("common.not_set"),
+                f"{character_type_display(character.character_type)} · {tr('life.' + character.life_status)}",
+            )))
+            button.setProperty("family", True)
+            button.setCheckable(True)
+            button.setChecked(character.member_id == profile.selected_member_id)
+            button.setStyleSheet(f"color:{CLASS_COLORS.get(character.class_name, MUTED)};")
+            button.clicked.connect(lambda _checked=False, member_id=character.member_id: self.characterSelected.emit(member_id))
+            self.family_buttons[character.member_id] = button
+            self.family_layout.addWidget(button)
+        self.family_layout.addStretch(1)
+
+    def set_character_selection(self, member_id: str | None) -> None:
+        super().set_character_selection(member_id)
+        for key, button in self.family_buttons.items():
+            button.setChecked(key == member_id)
+
+
+
 class GuildGearCheckerQt(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle(f"{APP_NAME} · Qt Preview {QT_PREVIEW_VERSION}")
+        self.setWindowTitle(f"{APP_NAME} · Qt v{APP_VERSION}")
         self.setMinimumSize(1040, 680)
         self.model = GuildModel()
         self.model.new_empty()
@@ -2858,7 +3977,8 @@ class GuildGearCheckerQt(QMainWindow):
         self._clm_dkp_by_member_id: dict[str, int | float] = {}
         self._raid_point_projection: tuple[object, ...] | None = None
         self._raid_view_dirty = {
-            "raids": True, "attendance": True, "matrix": True, "history": True,
+            "raids": True, "attendance": True, "matrix": True,
+            "history": True, "dkp_history": True,
         }
         self._reward_registry = RewardRegistry()
         self._reward_assignments = RewardAssignments()
@@ -2870,16 +3990,23 @@ class GuildGearCheckerQt(QMainWindow):
         self._graveyard_template_cache: dict[tuple, object] = {}
         self._graveyard_card_cache: dict[tuple, QPixmap] = {}
         try:
-            self._graveyard_zoom_percent = max(60, min(140, int(self._suite_settings.get("graveyard_zoom_percent", 100))))
+            self._graveyard_zoom_percent = max(40, min(140, int(self._suite_settings.get("graveyard_zoom_percent", 100))))
         except (TypeError, ValueError):
             self._graveyard_zoom_percent = 100
         self._graveyard_zoom_pending = self._graveyard_zoom_percent
         self._graveyard_zoom_timer = QTimer(self)
         self._graveyard_zoom_timer.setSingleShot(True)
-        self._graveyard_zoom_timer.setInterval(110)
+        self._graveyard_zoom_timer.setInterval(60)
         self._graveyard_zoom_timer.timeout.connect(self._apply_graveyard_zoom)
+        self._graveyard_zoom_save_timer = QTimer(self)
+        self._graveyard_zoom_save_timer.setSingleShot(True)
+        self._graveyard_zoom_save_timer.setInterval(500)
+        self._graveyard_zoom_save_timer.timeout.connect(self._persist_graveyard_zoom)
         try:
-            self._roster_zoom_percent = max(60, min(140, int(self._suite_settings.get("roster_zoom_percent", 100))))
+            self._roster_zoom_percent = max(
+                ROSTER_CLASSIC_ZOOM_MIN,
+                min(ROSTER_ZOOM_MAX, int(self._suite_settings.get("roster_zoom_percent", 100))),
+            )
         except (TypeError, ValueError):
             self._roster_zoom_percent = 100
         self._roster_zoom_pending = self._roster_zoom_percent
@@ -2889,6 +4016,7 @@ class GuildGearCheckerQt(QMainWindow):
         self._roster_zoom_timer.timeout.connect(self._apply_roster_zoom)
         self._roster_cards: list[QWidget] = []
         self._roster_view_mode = "cards"
+        self._roster_presentation = "draft"  # Session-only default; no persistence.
         self._roster_cards_dirty = True
         self._roster_list_dirty = True
         self._roster_list_sort_column = 0
@@ -2902,6 +4030,15 @@ class GuildGearCheckerQt(QMainWindow):
         self._pages: dict[str, QWidget] = {}
         self._player_profile_return_page = "rooster"
         self._player_profile: PlayerProfileViewModel | None = None
+        self._detail_loading = False
+        self._detail_autosave_dirty = False
+        self._detail_autosave_in_progress = False
+        self._detail_autosave_timer = QTimer(self)
+        self._detail_autosave_timer.setSingleShot(True)
+        self._detail_autosave_timer.setInterval(650)
+        self._detail_autosave_timer.timeout.connect(
+            lambda: self._flush_detail_autosave(refresh=False)
+        )
 
         self._load_qt_font()
         self.setStyleSheet(STYLE_SHEET)
@@ -3016,7 +4153,7 @@ class GuildGearCheckerQt(QMainWindow):
         grabber_button.setToolTip(tr("checker.grabber_handoff"))
         grabber_button.clicked.connect(self.open_portrait_grabber)
         header_layout.addWidget(grabber_button)
-        version = QLabel(f"Qt · {QT_PREVIEW_VERSION}\nEU · Stitches · Classic Era")
+        version = QLabel(f"Qt · {APP_VERSION}\nEU · Stitches · Classic Era")
         version.setObjectName("appMeta")
         version.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         header_layout.addWidget(version)
@@ -3046,11 +4183,13 @@ class GuildGearCheckerQt(QMainWindow):
         self.stack = QStackedWidget()
         self._pages["rooster"] = self._build_roster_page()
         self.player_profile_page = PlayerProfilePage()
-        self.player_profile_page.playerSelected.connect(self.open_player_profile)
-        self.player_profile_page.characterSelected.connect(self._select_profile_character)
-        self.player_profile_page.previousCharacterRequested.connect(self._select_previous_profile_character)
-        self.player_profile_page.nextCharacterRequested.connect(self._select_next_profile_character)
-        self.player_profile_page.backRequested.connect(self.close_player_profile)
+        self._profile_views = (self.player_profile_page, self.player_profile_page.draft_page)
+        for profile_view in self._profile_views:
+            profile_view.playerSelected.connect(self.open_player_profile)
+            profile_view.characterSelected.connect(self._select_profile_character)
+            profile_view.previousCharacterRequested.connect(self._select_previous_profile_character)
+            profile_view.nextCharacterRequested.connect(self._select_next_profile_character)
+            profile_view.backRequested.connect(self.close_player_profile)
         self._pages["player_profile"] = self.player_profile_page
         self._pages["graveyard"] = self._build_graveyard_page()
         self._pages["management"] = self._build_member_page()
@@ -3074,6 +4213,24 @@ class GuildGearCheckerQt(QMainWindow):
     # ---------- Verwaltung (interne member_* Namen bleiben für Kompatibilität bestehen) ----------
     def _build_member_page(self) -> QWidget:
         page = QWidget()
+        page.setObjectName("managementPage")
+        page.setStyleSheet("""
+            QWidget#managementPage {background:#11181f;}
+            QWidget#managementPage QLabel#sectionTitle {color:#f5dfb1;background:transparent;}
+            QWidget#managementPage QTableWidget {
+                background:#11181f;alternate-background-color:#17212a;
+                border:1px solid #584832;gridline-color:#29333c;
+                selection-background-color:#302b22;selection-color:#f5dfb1;
+            }
+            QWidget#managementPage QTableWidget::item:selected {background:#302b22;color:#f5dfb1;}
+            QWidget#managementPage QHeaderView::section {
+                background:#202830;color:#e1c183;
+                border-right:1px solid #584832;border-bottom:1px solid #80643f;
+            }
+            QWidget#managementPage QPushButton#subnavButton:checked {
+                background:#302b22;border-color:#80643f;color:#f5dfb1;
+            }
+        """)
         layout = QVBoxLayout(page)
         layout.setContentsMargins(14, 12, 14, 14)
         layout.setSpacing(9)
@@ -3082,37 +4239,11 @@ class GuildGearCheckerQt(QMainWindow):
         title = QLabel(tr("checker.management_title"))
         title.setObjectName("sectionTitle")
         top.addWidget(title)
-        top.addStretch(1)
         self.member_count = QLabel("")
         self.member_count.setObjectName("subtle")
-        top.addWidget(self.member_count)
-        layout.addLayout(top)
 
-        guild_card = QFrame()
-        guild_card.setProperty("card", True)
-        guild_layout = QHBoxLayout(guild_card)
-        guild_layout.setContentsMargins(12, 8, 12, 8)
-        guild_layout.addWidget(QLabel(tr("raid_clm_admin.guild_master_data")))
-        self.guild_name_edit = QLineEdit()
-        self.guild_name_edit.setPlaceholderText(tr("raid_clm_admin.guild_name"))
-        self.guild_name_edit.setMaximumWidth(220)
-        guild_layout.addWidget(self.guild_name_edit)
-        self.guild_realm_edit = QLineEdit()
-        self.guild_realm_edit.setPlaceholderText(tr("raid_clm_admin.realm"))
-        self.guild_realm_edit.setMaximumWidth(180)
-        guild_layout.addWidget(self.guild_realm_edit)
-        save_guild = set_button_role(
-            QPushButton(tr("raid_clm_admin.save_guild_master_data")), primary=True,
-        )
-        save_guild.clicked.connect(self.save_guild_master_data)
-        guild_layout.addWidget(save_guild)
-        assignments = QPushButton(tr("raid_clm_admin.player_assignments"))
-        assignments.clicked.connect(self.open_player_assignments)
-        guild_layout.addWidget(assignments)
-        guild_layout.addStretch(1)
-        layout.addWidget(guild_card)
-
-        actions = QHBoxLayout()
+        actions = top
+        actions.addSpacing(12)
         add_button = set_button_role(QPushButton(tr("checker.new_player")), primary=True)
         remove_button = set_button_role(QPushButton(tr("common.remove")), danger=True)
         wipe_button = set_button_role(QPushButton(tr("checker.wipe")), danger=True)
@@ -3127,13 +4258,10 @@ class GuildGearCheckerQt(QMainWindow):
         self.member_wipe_button = wipe_button
         for button in (add_button, remove_button, wipe_button, csv_button, save_button):
             actions.addWidget(button)
+        assignments = QPushButton(tr("raid_clm_admin.player_assignments"))
+        assignments.clicked.connect(self.open_player_assignments)
+        actions.addWidget(assignments)
         actions.addStretch(1)
-        self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText(tr("checker.search_placeholder"))
-        self.search_edit.setClearButtonEnabled(True)
-        self.search_edit.setMaximumWidth(260)
-        self.search_edit.textChanged.connect(lambda _text: self.refresh_member_table())
-        actions.addWidget(self.search_edit)
         layout.addLayout(actions)
 
         filters = QHBoxLayout()
@@ -3152,7 +4280,15 @@ class GuildGearCheckerQt(QMainWindow):
             button.clicked.connect(lambda _checked=False, tab=tab_name: self.set_member_tab(tab))
             filters.addWidget(button)
             self._member_subnav_buttons[tab_name] = button
+        filters.addWidget(self.member_count)
         filters.addStretch(1)
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText(tr("checker.search_placeholder"))
+        self.search_edit.setClearButtonEnabled(True)
+        self.search_edit.setMinimumWidth(120)
+        self.search_edit.setMaximumWidth(220)
+        self.search_edit.textChanged.connect(lambda _text: self.refresh_member_table())
+        filters.addWidget(self.search_edit)
         self.gear_filter_combo = QComboBox()
         self.gear_filter_combo.addItems([tr("common.all")] + [gear_status_display(value) for value in GEAR_VALUES])
         self.gear_filter_combo.currentIndexChanged.connect(lambda _index: self.refresh_member_table())
@@ -3162,6 +4298,12 @@ class GuildGearCheckerQt(QMainWindow):
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self.member_table = MemberTable()
+        self.member_table.apply_column_widths(
+            self._suite_settings.get(MANAGEMENT_COLUMN_WIDTHS_SETTING)
+        )
+        self.member_table.apply_column_order(
+            self._suite_settings.get(MANAGEMENT_COLUMN_ORDER_SETTING)
+        )
         self.member_table.currentItemChanged.connect(self._member_current_item_changed)
         self.member_table.itemChanged.connect(self._member_table_item_changed)
         self.member_table.paste_requested.connect(self._paste_member_table)
@@ -3179,7 +4321,23 @@ class GuildGearCheckerQt(QMainWindow):
 
     def _build_detail_panel(self) -> QWidget:
         panel = QFrame()
-        panel.setProperty("card", True)
+        panel.setObjectName("managementCharacterSheet")
+        panel.setStyleSheet("""
+            QFrame#managementCharacterSheet {
+                background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #17212a,stop:1 #11181f);
+                border:1px solid #80643f;border-radius:6px;
+            }
+            QFrame#managementCharacterSheet QWidget {background:transparent;}
+            QFrame#managementCharacterSheet QLabel {border:none;}
+            QFrame#managementCharacterSheet QLabel#memberName {color:#f5dfb1;font-weight:700;}
+            QFrame#managementCharacterSheet QLabel#subtle {color:#e1c183;}
+            QFrame#managementCharacterSheet QComboBox,
+            QFrame#managementCharacterSheet QTextEdit {background:#11181f;border:1px solid #584832;}
+            QFrame#managementCharacterSheet QComboBox QAbstractItemView {background:#17212a;}
+            QFrame#managementCharacterSheet QPushButton {background:#202a33;border-color:#665338;color:#f0dfbf;}
+            QFrame#managementCharacterSheet QPushButton[primary="true"] {background:#344e42;border-color:#547762;}
+            QFrame#managementCharacterSheet QPushButton[danger="true"] {background:#4a2b2e;border-color:#74464a;}
+        """)
         panel.setMinimumWidth(360)
         panel.setMinimumHeight(260)
         panel.setMaximumWidth(470)
@@ -3196,8 +4354,8 @@ class GuildGearCheckerQt(QMainWindow):
 
         hero = QHBoxLayout()
         hero.setSpacing(8)
-        self.detail_portrait = CoverImageLabel(tr("checker.missing_portrait"))
-        self.detail_reward_portrait = RewardPortraitContainer(
+        self.detail_portrait = ManagementPortraitLabel(tr("checker.missing_portrait"))
+        self.detail_reward_portrait = ManagementPortraitContainer(
             self.detail_portrait,
             QSize(MEMBER_DETAIL_PORTRAIT_SIZE, MEMBER_DETAIL_PORTRAIT_SIZE),
             rank_asset_size=96,
@@ -3209,22 +4367,24 @@ class GuildGearCheckerQt(QMainWindow):
         self.detail_rank_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.detail_rank_icon.setStyleSheet("background:transparent;border:none;")
         self.detail_rank_icon.hide()
-        hero.addWidget(self.detail_rank_icon, 0, Qt.AlignmentFlag.AlignTop)
         identity = QVBoxLayout()
         identity.setContentsMargins(0, 0, 0, 0)
-        identity.setSpacing(2)
+        identity.setSpacing(6)
         self.detail_name = QLabel("–")
         self.detail_name.setObjectName("memberName")
         self.detail_name.setWordWrap(True)
+        self.detail_name.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.detail_name.setMinimumWidth(100)
         identity.addWidget(self.detail_name)
         self.detail_class = QLabel("–")
-        self.detail_class.setObjectName("subtle")
+        self.detail_class.setWordWrap(True)
         identity.addWidget(self.detail_class)
         self.detail_life = QLabel("–")
         self.detail_life.setObjectName("statusPill")
         self.detail_life.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         identity.addWidget(self.detail_life)
         identity.addStretch(1)
+        identity.addWidget(self.detail_rank_icon, 0, Qt.AlignmentFlag.AlignLeft)
         hero.addLayout(identity, 1)
         content_layout.addLayout(hero)
 
@@ -3296,7 +4456,7 @@ class GuildGearCheckerQt(QMainWindow):
         self.detail_overview_form = form
         self.race_combo = QComboBox()
         self.race_combo.addItems([tr("common.not_set"), *race_display_values()])
-        self.class_combo = QComboBox()
+        self.class_combo = ClassComboBox()
         self.class_combo.addItems([tr("common.not_set"), *CLASS_NAMES])
         self.class_combo.currentTextChanged.connect(self._class_changed)
         self.spec_combo = QComboBox()
@@ -3318,6 +4478,11 @@ class GuildGearCheckerQt(QMainWindow):
         form.addRow(tr("checker.associated_main"), self.associated_main_combo)
         form.addRow(tr("checker.raid_role"), self.raid_role_combo)
         form.setRowVisible(self.associated_main_combo, False)
+        for combo in (
+            self.race_combo, self.spec_combo, self.character_type_combo,
+            self.associated_main_combo, self.raid_role_combo,
+        ):
+            combo.currentIndexChanged.connect(self._detail_discrete_changed)
         return widget
 
 
@@ -3331,6 +4496,8 @@ class GuildGearCheckerQt(QMainWindow):
         self.gear_combo.addItems([gear_status_display(value) for value in GEAR_VALUES])
         self.raid_status_combo = QComboBox()
         self.raid_status_combo.addItems([raid_status_display(value) for value in RAID_STATUS_VALUES])
+        self.gear_combo.currentIndexChanged.connect(self._detail_discrete_changed)
+        self.raid_status_combo.currentIndexChanged.connect(self._detail_discrete_changed)
         self.gear_combo.setMinimumHeight(28)
         self.raid_status_combo.setMinimumHeight(28)
         self.last_checked_value = QLabel("–")
@@ -3349,6 +4516,7 @@ class GuildGearCheckerQt(QMainWindow):
         self.notes_edit = QTextEdit()
         self.notes_edit.setPlaceholderText(tr("checker.detail_note"))
         self.notes_edit.setMinimumHeight(100)
+        self.notes_edit.textChanged.connect(self._detail_text_changed)
         layout.addWidget(self.notes_edit)
         return widget
 
@@ -3429,8 +4597,27 @@ class GuildGearCheckerQt(QMainWindow):
         top.addWidget(self.roster_cards_button)
         top.addWidget(self.roster_list_button)
 
+        self.roster_variant_controls = QWidget()
+        variant_row = QHBoxLayout(self.roster_variant_controls)
+        variant_row.setContentsMargins(0, 0, 0, 0)
+        variant_row.setSpacing(2)
+        self.roster_variant_group = QButtonGroup(self)
+        self.roster_variant_buttons = {}
+        for key, text_key in (("draft", "roster.variant_draft"), ("classic", "roster.variant_classic")):
+            button = QPushButton(tr(text_key))
+            button.setObjectName("subnavButton")
+            button.setCheckable(True)
+            button.setChecked(key == self._roster_presentation)
+            button.clicked.connect(lambda _checked=False, variant=key: self._set_roster_presentation(variant))
+            self.roster_variant_group.addButton(button)
+            self.roster_variant_buttons[key] = button
+            variant_row.addWidget(button)
+        top.addWidget(self.roster_variant_controls)
+
         zoom_frame = QFrame()
-        zoom_frame.setObjectName("graveZoomBar")
+        zoom_frame.setObjectName("rosterZoomBar")
+        zoom_frame.setProperty("modernView", self._roster_presentation == "draft")
+        self.roster_zoom_frame = zoom_frame
         zoom_row = QHBoxLayout(zoom_frame)
         zoom_row.setContentsMargins(8, 4, 8, 4)
         zoom_row.setSpacing(6)
@@ -3440,7 +4627,7 @@ class GuildGearCheckerQt(QMainWindow):
         roster_minus.setFixedSize(30, 30)
         roster_plus.setFixedSize(30, 30)
         self.roster_zoom_slider = QSlider(Qt.Orientation.Horizontal)
-        self.roster_zoom_slider.setRange(60, 140)
+        self.roster_zoom_slider.setRange(self._roster_zoom_min(), ROSTER_ZOOM_MAX)
         self.roster_zoom_slider.setSingleStep(10)
         self.roster_zoom_slider.setPageStep(10)
         self.roster_zoom_slider.setValue(self._roster_zoom_percent)
@@ -3449,10 +4636,14 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_zoom_value.setMinimumWidth(48)
         self.roster_zoom_value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         roster_minus.clicked.connect(
-            lambda: self.roster_zoom_slider.setValue(max(60, self.roster_zoom_slider.value() - 10))
+            lambda: self.roster_zoom_slider.setValue(max(
+                self.roster_zoom_slider.minimum(), self.roster_zoom_slider.value() - 10,
+            ))
         )
         roster_plus.clicked.connect(
-            lambda: self.roster_zoom_slider.setValue(min(140, self.roster_zoom_slider.value() + 10))
+            lambda: self.roster_zoom_slider.setValue(min(
+                self.roster_zoom_slider.maximum(), self.roster_zoom_slider.value() + 10,
+            ))
         )
         self.roster_zoom_slider.valueChanged.connect(self._schedule_roster_zoom)
         zoom_row.addWidget(roster_minus)
@@ -3464,7 +4655,15 @@ class GuildGearCheckerQt(QMainWindow):
         export_button = QPushButton(tr("roster.export_png"))
         export_button.clicked.connect(self.export_roster_png)
         top.addWidget(export_button)
-        layout.addLayout(top)
+        toolbar_content = QWidget()
+        toolbar_content.setLayout(top)
+        toolbar_scroll = QScrollArea()
+        toolbar_scroll.setWidgetResizable(True)
+        toolbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        toolbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        toolbar_scroll.setWidget(toolbar_content)
+        toolbar_scroll.setFixedHeight(toolbar_content.sizeHint().height() + 20)
+        layout.addWidget(toolbar_scroll)
 
         self.roster_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.roster_scroll = QScrollArea()
@@ -3479,6 +4678,15 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_content_stack = QStackedWidget()
         self.roster_content_stack.addWidget(self.roster_scroll)
         self.roster_list = CopyableReadOnlyTable(0, 10)
+        self.roster_list.setObjectName("rosterListTable")
+        self.roster_list.setStyleSheet("""
+            QTableWidget#rosterListTable {
+                selection-background-color:#302b22;selection-color:#f5dfb1;
+            }
+            QTableWidget#rosterListTable::item:selected {
+                background:#302b22;color:#f5dfb1;
+            }
+        """)
         self.roster_list.setHorizontalHeaderLabels([
             tr("roster.column_name"), tr("roster.column_class"), tr("roster.column_role"),
             tr("roster.column_character_type"), tr("roster.column_gear"),
@@ -3491,7 +4699,12 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.roster_list.setAlternatingRowColors(True)
         self.roster_list.verticalHeader().setVisible(False)
-        self.roster_list.horizontalHeader().setStretchLastSection(True)
+        roster_list_header = self.roster_list.horizontalHeader()
+        roster_list_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        roster_list_header.setMinimumSectionSize(60)
+        roster_list_header.setStretchLastSection(False)
+        for column, width in enumerate((210, 120, 95, 120, 110, 145, 115, 125, 170, 170)):
+            self.roster_list.setColumnWidth(column, width)
         self.roster_list.cellClicked.connect(lambda row, _column: self._roster_list_clicked(row))
         self.roster_list.cellDoubleClicked.connect(self._roster_list_profile_requested)
         self.roster_list.horizontalHeader().sortIndicatorChanged.connect(self._roster_list_sort_changed)
@@ -3510,7 +4723,9 @@ class GuildGearCheckerQt(QMainWindow):
         return page
 
     def _build_roster_detail_panel(self) -> QWidget:
+        draft = self._roster_uses_draft()
         panel = QFrame()
+        panel.setProperty("rosterDraft", draft)
         panel.setProperty("card", True)
         panel.setMinimumWidth(360)
         panel.setMaximumWidth(480)
@@ -3550,7 +4765,8 @@ class GuildGearCheckerQt(QMainWindow):
 
         hero = QVBoxLayout()
         hero.setSpacing(3)
-        self.roster_detail_portrait = CoverImageLabel(tr("checker.missing_portrait"))
+        portrait_class = RosterPortraitLabel if draft else CoverImageLabel
+        self.roster_detail_portrait = portrait_class(tr("checker.missing_portrait"))
         # Der kleinere Gesamtblock lässt dem Informationsbereich mehr Höhe;
         # die tatsächliche Portraithöhe folgt weiterhin der Rahmenöffnung.
         self.roster_reward_portrait = RewardPortraitContainer(
@@ -3696,10 +4912,169 @@ class GuildGearCheckerQt(QMainWindow):
             )
         )
         layout.addWidget(self.roster_profile_button)
+        if draft:
+            self._arrange_roster_character_sheet(panel, close, armory)
         return panel
+
+    def _roster_uses_draft(self) -> bool:
+        return self._roster_view_mode == "cards" and self._roster_presentation == "draft"
+
+    def _arrange_roster_character_sheet(
+        self, panel: QFrame, close: QPushButton, armory: QPushButton,
+    ) -> None:
+        """Give the draft detail a calm, portrait-led character-sheet composition."""
+        panel.setObjectName("rosterCharacterSheet")
+        panel.setMinimumWidth(360)
+        panel.setMaximumWidth(480)
+        panel.setStyleSheet("""
+            QFrame#rosterCharacterSheet {
+                background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #17212a,stop:1 #11181f);
+                border:1px solid #80643f;border-radius:6px;
+            }
+            QFrame#rosterCharacterSheet QLabel {background:transparent;border:none;}
+        """)
+        previous_content = self.roster_detail_scroll.takeWidget()
+        content = QWidget()
+        content.setStyleSheet("background:transparent;")
+        body = QVBoxLayout(content)
+        body.setContentsMargins(16, 14, 16, 16)
+        body.setSpacing(10)
+
+        header = QHBoxLayout()
+        self.roster_detail_name.setStyleSheet("font-size:20pt;font-weight:700;color:#f5dfb1;")
+        name_policy = self.roster_detail_name.sizePolicy()
+        name_policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        self.roster_detail_name.setSizePolicy(name_policy)
+        self.roster_detail_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header.addWidget(self.roster_detail_name, 1)
+        header.addWidget(close, 0, Qt.AlignmentFlag.AlignTop)
+        body.addLayout(header)
+
+        self.roster_detail_class.setWordWrap(True)
+        self.roster_detail_class.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        body.addWidget(self.roster_detail_class, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        statuses = QHBoxLayout()
+        statuses.addStretch(1)
+        for label in (self.roster_detail_life, self.roster_detail_raid):
+            statuses.addWidget(label)
+        statuses.addStretch(1)
+        body.addLayout(statuses)
+
+        portrait_row = QHBoxLayout()
+        portrait_row.setSpacing(22)
+        portrait_row.addStretch(1)
+        portrait_row.addWidget(
+            self.roster_reward_portrait, 0,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter,
+        )
+        rank_column = QWidget()
+        rank_column.setMaximumWidth(126)
+        rank_layout = QVBoxLayout(rank_column)
+        rank_layout.setContentsMargins(0, 18, 0, 0)
+        rank_layout.setSpacing(3)
+        self.roster_rank_slot.setFixedSize(116, 108)
+        self.roster_rank_slot.layout().setContentsMargins(12, 0, 0, 0)
+        rank_layout.addWidget(self.roster_rank_slot, 0, Qt.AlignmentFlag.AlignHCenter)
+        self.roster_detail_rank.setWordWrap(True)
+        self.roster_detail_rank.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.roster_detail_rank.setStyleSheet(
+            "font-size:12pt;color:#e1c183;font-weight:600;"
+        )
+        rank_layout.addWidget(self.roster_detail_rank)
+        rank_layout.addStretch(1)
+        portrait_row.addWidget(rank_column, 0, Qt.AlignmentFlag.AlignTop)
+        portrait_row.addStretch(1)
+        body.addLayout(portrait_row)
+
+        identity = QHBoxLayout()
+        identity.addStretch(1)
+        identity.addWidget(self.roster_detail_type)
+        identity.addWidget(QLabel("·"))
+        identity.addWidget(self.roster_detail_role)
+        identity.addStretch(1)
+        body.addLayout(identity)
+
+        checked = QHBoxLayout()
+        checked.addStretch(1)
+        caption = QLabel(tr("checker.last_checked"))
+        caption.setObjectName("subtle")
+        checked.addWidget(caption)
+        checked.addWidget(self.roster_detail_checked)
+        checked.addStretch(1)
+        body.addLayout(checked)
+
+        self.roster_points_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        self.roster_points_form.setVerticalSpacing(4)
+        for value in (self.roster_current_dkp, self.roster_character_points, self.roster_player_points):
+            value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            value.setStyleSheet("font-size:14pt;font-weight:700;color:#f0d7a4;")
+        self.roster_points_section.setStyleSheet(
+            "background:#151e25;border:1px solid #584832;border-radius:5px;"
+        )
+        body.addWidget(self.roster_points_section)
+        body.addWidget(self.roster_dkp_section)
+
+        notes_title = QLabel(tr("roster.notes"))
+        notes_title.setObjectName("subtle")
+        body.addWidget(notes_title)
+        self.roster_detail_notes.setMinimumHeight(96)
+        self.roster_detail_notes.setMaximumHeight(120)
+        body.addWidget(self.roster_detail_notes)
+        body.addStretch(1)
+        self.roster_detail_scroll.setWidget(content)
+
+        # Keep the two existing actions reachable without disturbing the calm
+        # vertical reading order of the sheet itself.
+        footer = QWidget()
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(12, 8, 12, 10)
+        footer_layout.setSpacing(8)
+        self.roster_profile_button.setStyleSheet(
+            "background:#594322;border:1px solid #bc9455;color:#ffedca;padding:7px;"
+        )
+        footer_layout.addWidget(armory)
+        footer_layout.addWidget(self.roster_profile_button)
+        panel.layout().addWidget(footer)
+        previous_content.deleteLater()
+
+    def _sync_roster_detail_presentation(self) -> None:
+        if bool(self.roster_detail_panel.property("rosterDraft")) == self._roster_uses_draft():
+            return
+        old_panel = self.roster_detail_panel
+        old_panel.hide()
+        new_panel = self._build_roster_detail_panel()
+        self.roster_splitter.replaceWidget(1, new_panel)
+        self.roster_detail_panel = new_panel
+        new_panel.hide()
+        old_panel.deleteLater()
+        self._sync_points_ui_visibility()
+        self._refresh_visible_dkp_details()
+
+    def _set_roster_presentation(self, variant: str) -> None:
+        if variant not in ("classic", "draft") or variant == self._roster_presentation:
+            return
+        self._roster_presentation = variant
+        self.roster_zoom_frame.setProperty("modernView", variant == "draft")
+        zoom_style = self.roster_zoom_frame.style()
+        zoom_style.unpolish(self.roster_zoom_frame)
+        zoom_style.polish(self.roster_zoom_frame)
+        self.roster_zoom_frame.update()
+        self.roster_variant_buttons[variant].setChecked(True)
+        self._sync_roster_zoom_range()
+        self._roster_cards_dirty = True
+        self._sync_roster_detail_presentation()
+        self._refresh_current_roster_view()
+
+    def _apply_roster_card_selection(self) -> None:
+        selected_id = getattr(self, "roster_selected_member_id", None)
+        for card in self._roster_cards:
+            if isinstance(card, RosterDraftCard):
+                card.set_selected(card.member_id == selected_id)
 
     def _close_roster_detail(self) -> None:
         self.roster_selected_member_id = None
+        self._apply_roster_card_selection()
         self.roster_reward_portrait.clear_reward_badge()
         self.roster_reward_portrait.clear_reward_frame()
         self.roster_rank_icon.clear()
@@ -3767,6 +5142,8 @@ class GuildGearCheckerQt(QMainWindow):
 
     def _set_roster_view(self, mode: str) -> None:
         self._roster_view_mode = "list" if mode == "list" else "cards"
+        self.roster_variant_controls.setVisible(self._roster_view_mode == "cards")
+        self._sync_roster_detail_presentation()
         self.roster_cards_button.setChecked(self._roster_view_mode == "cards")
         self.roster_list_button.setChecked(self._roster_view_mode == "list")
         self.roster_content_stack.setCurrentWidget(
@@ -3829,27 +5206,73 @@ class GuildGearCheckerQt(QMainWindow):
         layout.addWidget(self.raid_subtabs, 1)
 
         raids_page = QWidget()
+        raids_page.setObjectName("raidPage")
+        raids_page.setStyleSheet("""
+            QWidget#raidPage QTableWidget::item:selected {
+                background:#3b3426;color:#f5dfb1;
+            }
+            QWidget#raidPage QHeaderView::section {
+                background:#202830;color:#e1c183;
+                border-right:1px solid #584832;border-bottom:1px solid #80643f;
+            }
+            QWidget#raidPage QTableWidget {
+                background:#11181f;alternate-background-color:#17212a;
+                selection-background-color:#3b3426;selection-color:#f5dfb1;
+                gridline-color:#29333c;
+            }
+            QWidget#raidPage QFrame#selectedRaidHeader {
+                background:#151e25;border:1px solid #584832;border-radius:5px;
+            }
+            QWidget#raidPage QLabel#raidHeaderDate {color:#aeb8c2;}
+            QWidget#raidPage QLabel#raidHeaderType {
+                color:#e1c183;font-weight:700;padding:3px 8px;
+                background:#302b22;border:1px solid #80643f;border-radius:4px;
+            }
+            QWidget#raidPage QLabel#raidHeaderName {
+                color:#f5dfb1;font-size:13pt;font-weight:700;
+            }
+            QWidget#raidPage QLabel#raidHeaderMeta {color:#aeb8c2;}
+            QWidget#raidPage QPushButton#raidLogsLink {
+                background:transparent;color:#e1c183;border:1px solid #584832;
+                padding:4px 9px;
+            }
+            QWidget#raidPage QPushButton#raidLogsLink:hover {
+                background:#302b22;border-color:#c7a265;
+            }
+        """)
         raids_layout = QVBoxLayout(raids_page)
+
         actions = QHBoxLayout()
-        for text, callback, role in (
-            (tr("raids.create"), self.create_raid_dialog, "primary"),
-            (tr("raids.bulk_action"), self.bulk_import_raid_csvs, "normal"),
-            (tr("raids.edit"), self.edit_selected_raid, "normal"),
-            (tr("raids.delete"), self.delete_selected_raid, "danger"),
-            (tr("raids.reset_attendance"), self.reset_selected_raid_attendance, "normal"),
-        ):
-            button = QPushButton(text)
-            set_button_role(button, primary=role == "primary", danger=role == "danger")
-            button.clicked.connect(callback)
-            actions.addWidget(button)
+        self.raid_create_button = set_button_role(
+            QPushButton(tr("raids.create")), primary=True,
+        )
+        self.raid_create_button.clicked.connect(self.create_raid_dialog)
+        actions.addWidget(self.raid_create_button)
+        self.raid_bulk_import_button = QPushButton(tr("raids.bulk_action"))
+        self.raid_bulk_import_button.clicked.connect(self.bulk_import_raid_csvs)
+        actions.addWidget(self.raid_bulk_import_button)
+        actions.addStretch(1)
+        self.raid_edit_button = QPushButton(tr("raids.edit"))
+        self.raid_edit_button.clicked.connect(self.edit_selected_raid)
+        actions.addWidget(self.raid_edit_button)
         self.raid_points_button = QPushButton(tr("raid_points.adjust"))
         self.raid_points_button.clicked.connect(self.adjust_selected_raid_points)
         self.raid_points_button.setVisible(self.model.raid_points.enabled)
         actions.addWidget(self.raid_points_button)
-        actions.addStretch(1)
+        self.raid_reset_button = set_button_role(
+            QPushButton(tr("raids.reset_attendance")), danger=True,
+        )
+        self.raid_reset_button.clicked.connect(self.reset_selected_raid_attendance)
+        actions.addWidget(self.raid_reset_button)
+        self.raid_delete_button = set_button_role(
+            QPushButton(tr("raids.delete")), danger=True,
+        )
+        self.raid_delete_button.clicked.connect(self.delete_selected_raid)
+        actions.addWidget(self.raid_delete_button)
         raids_layout.addLayout(actions)
 
-        split = QSplitter(Qt.Orientation.Vertical)
+        self.raid_splitter = QSplitter(Qt.Orientation.Vertical)
+
         self.raid_table = QTableWidget(0, 6)
         self.raid_table.setHorizontalHeaderLabels([
             tr("common.date"), tr("raids.raid_type"), tr("raids.raid"),
@@ -3867,17 +5290,44 @@ class GuildGearCheckerQt(QMainWindow):
         raid_header.setSortIndicator(
             self._raid_sort_column, Qt.SortOrder.DescendingOrder,
         )
-        for column in (0, 1, 3, 4, 5):
-            raid_header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
-        raid_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        raid_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        raid_header.setMinimumSectionSize(50)
+        for column, width in enumerate((115, 110, 320, 95, 110, 125)):
+            self.raid_table.setColumnWidth(column, width)
         self.raid_table.itemSelectionChanged.connect(self.refresh_raid_participants)
         self.raid_table.cellClicked.connect(self._raid_table_clicked)
         raid_header.sectionClicked.connect(self._raid_table_sort_clicked)
-        split.addWidget(self.raid_table)
+        self.raid_splitter.addWidget(self.raid_table)
 
         participants_frame = QFrame()
         participants_frame.setProperty("card", True)
         participants_layout = QVBoxLayout(participants_frame)
+        self.selected_raid_header = QFrame(participants_frame)
+        self.selected_raid_header.setObjectName("selectedRaidHeader")
+        self.selected_raid_header.setVisible(False)
+        selected_raid_layout = QHBoxLayout(self.selected_raid_header)
+        selected_raid_layout.setContentsMargins(10, 6, 10, 6)
+        selected_raid_layout.setSpacing(12)
+        self.raid_header_date = QLabel()
+        self.raid_header_date.setObjectName("raidHeaderDate")
+        self.raid_header_type = QLabel()
+        self.raid_header_type.setObjectName("raidHeaderType")
+        self.raid_header_name = QLabel()
+        self.raid_header_name.setObjectName("raidHeaderName")
+        selected_raid_layout.addWidget(self.raid_header_date)
+        selected_raid_layout.addWidget(self.raid_header_type)
+        selected_raid_layout.addWidget(self.raid_header_name, 1)
+        self.raid_header_count = QLabel()
+        self.raid_header_count.setObjectName("raidHeaderMeta")
+        self.raid_header_status = QLabel()
+        self.raid_header_status.setObjectName("raidHeaderMeta")
+        self.raid_header_logs = QPushButton("Link")
+        self.raid_header_logs.setObjectName("raidLogsLink")
+        self.raid_header_logs.clicked.connect(self._open_selected_raid_logs)
+        selected_raid_layout.addWidget(self.raid_header_count)
+        selected_raid_layout.addWidget(self.raid_header_status)
+        selected_raid_layout.addWidget(self.raid_header_logs)
+        participants_layout.addWidget(self.selected_raid_header)
         participants_top = QHBoxLayout()
         participants_title = QLabel(tr("raids.raid_participants"))
         participants_title.setStyleSheet("font-size:12pt;font-weight:700;background:transparent;border:none;")
@@ -3896,18 +5346,33 @@ class GuildGearCheckerQt(QMainWindow):
         self.raid_participants_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.raid_participants_table.verticalHeader().setVisible(False)
         participants_header = self.raid_participants_table.horizontalHeader()
-        participants_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
-        participants_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        participants_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        participants_header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self.raid_participants_table.setColumnWidth(0, 180)
+        participants_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        participants_header.setMinimumSectionSize(60)
+        for column, width in enumerate((190, 280, 100, 130)):
+            self.raid_participants_table.setColumnWidth(column, width)
         participants_layout.addWidget(self.raid_participants_table)
-        split.addWidget(participants_frame)
-        split.setSizes([330, 290])
-        raids_layout.addWidget(split, 1)
+        self.raid_participants_frame = participants_frame
+        self.raid_splitter.addWidget(self.raid_participants_frame)
+        self.raid_splitter.setSizes([330, 290])
+        raids_layout.addWidget(self.raid_splitter, 1)
         self.raid_subtabs.addTab(raids_page, tr("raids.page_raids"))
 
         attendance_page = QWidget()
+        attendance_page.setObjectName("attendancePage")
+        attendance_page.setStyleSheet("""
+            QWidget#attendancePage QPushButton#matrixToggleButton {
+                background:#202a33;color:#f0dfbf;border:1px solid #584832;
+            }
+            QWidget#attendancePage QPushButton#matrixToggleButton:hover {
+                background:#302b22;border-color:#c7a265;
+            }
+            QWidget#attendancePage QPushButton#matrixToggleButton:checked {
+                background:#302b22;border-color:#80643f;color:#f5dfb1;
+            }
+            QWidget#attendancePage QSplitter#attendanceMatrixSplit::handle {
+                background:#80643f;width:2px;
+            }
+        """)
         attendance_layout = QVBoxLayout(attendance_page)
         self._build_raid_filters(attendance_layout, "matrix", include_limit=True)
 
@@ -3917,6 +5382,7 @@ class GuildGearCheckerQt(QMainWindow):
         matrix_toolbar.addWidget(legend)
         matrix_toolbar.addStretch(1)
         self.matrix_toggle_button = QPushButton(tr("raids.matrix_hide"))
+        self.matrix_toggle_button.setObjectName("matrixToggleButton")
         self.matrix_toggle_button.setCheckable(True)
         self.matrix_toggle_button.clicked.connect(self._toggle_attendance_matrix)
         matrix_toolbar.addWidget(self.matrix_toggle_button)
@@ -3927,12 +5393,15 @@ class GuildGearCheckerQt(QMainWindow):
         self._matrix_last_header_column: int | None = None
         self._matrix_raids = []
         self._matrix_players = []
+        self._attendance_stats_column_widths: dict[int, int] = {}
+        self._attendance_matrix_column_widths: dict[str, int] = {}
         self._matrix_syncing_scroll = False
         self._attendance_refresh_pending = False
         self._attendance_sort_pending = False
         self._attendance_matrix_last_width = 860
 
         self.attendance_matrix_split = QSplitter(Qt.Orientation.Horizontal)
+        self.attendance_matrix_split.setObjectName("attendanceMatrixSplit")
 
         self.raid_stats_table = QTableWidget(0, RAID_ATTENDANCE_FIXED_COLUMNS)
         self.raid_stats_table.setHorizontalHeaderLabels([
@@ -3955,10 +5424,12 @@ class GuildGearCheckerQt(QMainWindow):
         stats_header.setSortIndicatorShown(True)
         stats_header.setFixedHeight(RAID_MATRIX_HEADER_HEIGHT)
         stats_header.sectionClicked.connect(self._attendance_table_header_clicked)
-        stats_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
-        for column in range(1, RAID_ATTENDANCE_FIXED_COLUMNS):
-            stats_header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
-        self.raid_stats_table.setColumnWidth(0, 185)
+        stats_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        stats_header.setMinimumSectionSize(40)
+        self.raid_stats_table.setColumnWidth(0, 175)
+        for column, width in enumerate(RAID_MATRIX_STAT_COLUMN_WIDTHS, start=1):
+            self.raid_stats_table.setColumnWidth(column, width)
+        stats_header.sectionResized.connect(self._attendance_stats_section_resized)
 
         self.raid_matrix_table = QTableWidget(0, 0)
         self.raid_matrix_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -3974,8 +5445,9 @@ class GuildGearCheckerQt(QMainWindow):
         matrix_header = self.raid_matrix_table.horizontalHeader()
         matrix_header.setSectionsClickable(True)
         matrix_header.setFixedHeight(RAID_MATRIX_HEADER_HEIGHT)
+        matrix_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         matrix_header.sectionClicked.connect(self._matrix_raid_clicked)
-        matrix_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+        matrix_header.sectionResized.connect(self._attendance_matrix_section_resized)
 
         self.raid_stats_table.verticalScrollBar().valueChanged.connect(
             lambda value: self._sync_matrix_vertical_scroll(self.raid_matrix_table, value)
@@ -4019,10 +5491,10 @@ class GuildGearCheckerQt(QMainWindow):
         self.point_history_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.point_history_table.verticalHeader().setVisible(False)
         history_header = self.point_history_table.horizontalHeader()
-        for column in (0, 2, 3, 4, 5, 7):
-            history_header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
-        history_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        history_header.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
+        history_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        history_header.setMinimumSectionSize(55)
+        for column, width in enumerate((115, 260, 180, 120, 105, 120, 240, 110)):
+            self.point_history_table.setColumnWidth(column, width)
         self.point_history_table.cellDoubleClicked.connect(
             lambda row, _column: self._open_history_raid(row)
         )
@@ -4039,17 +5511,112 @@ class GuildGearCheckerQt(QMainWindow):
         self.point_history_subject.currentIndexChanged.connect(
             lambda _index: self.refresh_point_history()
         )
+
+        dkp_history_page = QWidget()
+        dkp_history_layout = QVBoxLayout(dkp_history_page)
+        dkp_filters = QHBoxLayout()
+        dkp_filters.addWidget(QLabel(tr("raid_points.filter_mode")))
+        self.dkp_history_mode = QComboBox()
+        self.dkp_history_mode.addItem(tr("raid_points.filter_player"), "player")
+        self.dkp_history_mode.addItem(tr("raid_points.filter_character"), "character")
+        dkp_filters.addWidget(self.dkp_history_mode)
+        self.dkp_history_subject = QComboBox()
+        self.dkp_history_subject.setMinimumWidth(300)
+        dkp_filters.addWidget(self.dkp_history_subject)
+        dkp_filters.addStretch(1)
+        dkp_history_layout.addLayout(dkp_filters)
+        dkp_hint = QLabel(tr("dkp_history.hint"))
+        dkp_hint.setObjectName("subtle")
+        dkp_history_layout.addWidget(dkp_hint)
+        self.dkp_history_table = QTableWidget(0, 6)
+        self.dkp_history_table.setHorizontalHeaderLabels([
+            tr("common.date"), tr("dkp_history.source"), tr("raids.character"),
+            tr("dkp_history.type"), tr("dkp_history.change"), tr("dkp_history.reason"),
+        ])
+        self.dkp_history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.dkp_history_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.dkp_history_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.dkp_history_table.verticalHeader().setVisible(False)
+        self.dkp_history_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        dkp_header = self.dkp_history_table.horizontalHeader()
+        dkp_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        dkp_header.setMinimumSectionSize(55)
+        dkp_header.setStretchLastSection(False)
+        for column, width in enumerate((160, 300, 190, 170, 105, 320)):
+            self.dkp_history_table.setColumnWidth(column, width)
+        self.dkp_history_table.setSortingEnabled(True)
+        self.dkp_history_table.sortItems(0, Qt.SortOrder.DescendingOrder)
+        self.dkp_history_table.cellDoubleClicked.connect(
+            lambda row, _column: self._open_dkp_history_raid(row)
+        )
+        dkp_history_layout.addWidget(self.dkp_history_table, 1)
+        self.dkp_history_page = dkp_history_page
+        self.dkp_history_mode.currentIndexChanged.connect(
+            lambda _index: self._populate_dkp_history_subjects()
+        )
+        self.dkp_history_subject.currentIndexChanged.connect(
+            lambda _index: self.refresh_dkp_history()
+        )
         self.raids_page = raids_page
         self.attendance_page = attendance_page
         self.raid_subtabs.currentChanged.connect(self._raid_subtab_changed)
         return page
 
-    def _build_raid_filters(self, layout: QVBoxLayout, prefix: str, include_limit: bool = False) -> None:
-        row = QHBoxLayout()
+    def _update_selected_raid_header(self, participant_count: int | None = None) -> None:
+        raid = self._selected_raid()
+        self.selected_raid_header.setVisible(raid is not None)
+        if raid is None:
+            self.raid_header_date.clear()
+            self.raid_header_type.clear()
+            self.raid_header_name.clear()
+            self.raid_header_count.clear()
+            self.raid_header_status.clear()
+            self.raid_header_logs.setVisible(False)
+            return
+        if participant_count is None:
+            participant_count = self.raid_participants_table.rowCount()
+        self.raid_header_date.setText(raid.date)
+        self.raid_header_type.setText(raid.raidType or "–")
+        self.raid_header_name.setText(raid.name)
+        self.raid_header_count.setText(
+            f"{participant_count} {tr('raids.participants')}"
+        )
+        recorded = raid.status == "recorded"
+        self.raid_header_status.setText(
+            tr("raids.status_recorded" if recorded else "raids.status_draft")
+        )
+        self.raid_header_status.setStyleSheet(
+            f"color:{'#8ec79a' if recorded else '#e1c183'};"
+        )
+        self.raid_header_logs.setVisible(bool(raid.warcraftLogsUrl))
+        self.raid_header_logs.setToolTip(raid.warcraftLogsUrl)
 
-        row.addWidget(QLabel(tr("raids.view_mode")))
+    def _open_selected_raid_logs(self) -> None:
+        raid = self._selected_raid()
+        if raid is not None and raid.warcraftLogsUrl:
+            webbrowser.open_new_tab(raid.warcraftLogsUrl)
+
+    def _build_raid_filters(self, layout: QVBoxLayout, prefix: str, include_limit: bool = False) -> None:
+        toolbar = QVBoxLayout()
+        toolbar.setContentsMargins(0, 0, 0, 0)
+        toolbar.setSpacing(5)
+        view_period_row = QHBoxLayout()
+        view_period_row.setSpacing(6)
+
+        view_label = QLabel(tr("raids.view_mode"))
+        view_label.setObjectName("subtle")
+        view_period_row.addWidget(view_label)
         view_switch = QFrame()
+        view_switch.setObjectName("attendanceViewSwitch")
         view_switch.setProperty("innerCard", True)
+        view_switch.setStyleSheet("""
+            QFrame#attendanceViewSwitch QPushButton#viewSwitchButton:checked {
+                background:#302b22;border-color:#80643f;color:#f5dfb1;
+            }
+            QFrame#attendanceViewSwitch QPushButton#viewSwitchButton:hover {
+                border-color:#c7a265;
+            }
+        """)
         view_switch_layout = QHBoxLayout(view_switch)
         view_switch_layout.setContentsMargins(2, 2, 2, 2)
         view_switch_layout.setSpacing(0)
@@ -4065,13 +5632,19 @@ class GuildGearCheckerQt(QMainWindow):
             self.matrix_view_group.addButton(button)
             view_switch_layout.addWidget(button)
         player_button.setChecked(True)
-        row.addWidget(view_switch)
+        view_period_row.addWidget(view_switch)
 
         self.matrix_subject_label = QLabel(tr("raids.player_filter"))
-        row.addWidget(self.matrix_subject_label)
+        self.matrix_subject_label.setObjectName("subtle")
+        view_period_row.addWidget(self.matrix_subject_label)
         subject = QComboBox()
-        subject.setMinimumWidth(210)
-        row.addWidget(subject)
+        subject.setMinimumWidth(180)
+        view_period_row.addWidget(subject)
+        view_period_row.addSpacing(8)
+
+        period_label = QLabel(tr("raids.date_range"))
+        period_label.setObjectName("subtle")
+        view_period_row.addWidget(period_label)
 
         start = QLineEdit()
         start.setPlaceholderText(tr("raids.date_from"))
@@ -4079,6 +5652,16 @@ class GuildGearCheckerQt(QMainWindow):
         end = QLineEdit()
         end.setPlaceholderText(tr("raids.date_to"))
         end.setMaximumWidth(125)
+        view_period_row.addWidget(start)
+        view_period_row.addWidget(end)
+        view_period_row.addStretch(1)
+        toolbar.addLayout(view_period_row)
+
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(6)
+        filter_label = QLabel(tr("raids.filter_search"))
+        filter_label.setObjectName("subtle")
+        filter_row.addWidget(filter_label)
         category = QComboBox()
         category.addItem(tr("common.all"), "")
         for value in RAID_CATEGORIES:
@@ -4087,12 +5670,19 @@ class GuildGearCheckerQt(QMainWindow):
         raid_type.addItem(tr("common.all"), "")
         for value in RAID_TYPES:
             raid_type.addItem(value, value)
-        for widget in (start, end, category, raid_type):
-            row.addWidget(widget)
+        category_label = QLabel(tr("common.category"))
+        category_label.setObjectName("subtle")
+        filter_row.addWidget(category_label)
+        filter_row.addWidget(category)
+        raid_type_label = QLabel(tr("raids.raid_type"))
+        raid_type_label.setObjectName("subtle")
+        filter_row.addWidget(raid_type_label)
+        filter_row.addWidget(raid_type)
 
         search = QLineEdit()
         search.setPlaceholderText(tr("raids.player_search"))
-        row.addWidget(search)
+        search.setMinimumWidth(110)
+        filter_row.addWidget(search, 1)
         active = QCheckBox(tr("raids.active_only"))
         active.setChecked(True)
         active.setVisible(False)
@@ -4118,11 +5708,11 @@ class GuildGearCheckerQt(QMainWindow):
                 ("last_attendance", tr("raids.sort_last_attendance")),
             ):
                 sort_combo.addItem(text, key)
-            row.addWidget(limit)
-            row.addWidget(sort_combo)
+            filter_row.addWidget(limit)
+            filter_row.addWidget(sort_combo)
 
-        row.addStretch(1)
-        layout.addLayout(row)
+        toolbar.addLayout(filter_row)
+        layout.addLayout(toolbar)
         setattr(self, f"{prefix}_date_from", start)
         setattr(self, f"{prefix}_date_to", end)
         setattr(self, f"{prefix}_category_filter", category)
@@ -4137,19 +5727,25 @@ class GuildGearCheckerQt(QMainWindow):
         if sort_combo is not None:
             setattr(self, f"{prefix}_sort", sort_combo)
 
-        callback = self._refresh_attendance_combined
-        start.textChanged.connect(lambda _text: callback())
-        end.textChanged.connect(lambda _text: callback())
-        category.currentIndexChanged.connect(lambda _index: callback())
-        raid_type.currentIndexChanged.connect(lambda _index: callback())
-        search.textChanged.connect(lambda _text: callback())
-        active.toggled.connect(lambda _checked: callback())
-        subject.currentIndexChanged.connect(lambda _index: callback())
+        if prefix == "matrix":
+            self._attendance_text_filter_timer = QTimer(self)
+            self._attendance_text_filter_timer.setSingleShot(True)
+            self._attendance_text_filter_timer.setInterval(400)
+            self._attendance_text_filter_timer.timeout.connect(
+                self._refresh_attendance_combined
+            )
+        start.textChanged.connect(self._schedule_attendance_text_filter)
+        end.textChanged.connect(self._schedule_attendance_text_filter)
+        search.textChanged.connect(self._schedule_attendance_text_filter)
+        category.currentIndexChanged.connect(self._refresh_attendance_immediately)
+        raid_type.currentIndexChanged.connect(self._refresh_attendance_immediately)
+        active.toggled.connect(self._refresh_attendance_immediately)
+        subject.currentIndexChanged.connect(self._refresh_attendance_immediately)
         self.matrix_view_group.buttonClicked.connect(
             lambda _button: self._matrix_view_mode_changed()
         )
         if limit is not None:
-            limit.currentIndexChanged.connect(lambda _index: callback())
+            limit.currentIndexChanged.connect(self._refresh_attendance_immediately)
         if sort_combo is not None:
             sort_combo.currentIndexChanged.connect(self._matrix_sort_dropdown_changed)
         self._populate_matrix_subjects()
@@ -4157,6 +5753,24 @@ class GuildGearCheckerQt(QMainWindow):
     # ---------- Settings ----------
     def _build_settings_page(self) -> QWidget:
         page = QWidget()
+        page.setObjectName("settingsPage")
+        page.setStyleSheet("""
+            QWidget#settingsPage { background:#0d1219; }
+            QWidget#settingsPage QLabel { background:transparent; border:none; }
+            QWidget#settingsPage QFrame[card="true"] {
+                background:#131922; border:1px solid #5b4930; border-radius:3px;
+            }
+            QWidget#settingsPage QPushButton[primary="true"] {
+                background:#302b22; border:1px solid #80643f; color:#f5dfb1;
+            }
+            QWidget#settingsPage QPushButton[primary="true"]:hover {
+                background:#3a3325; border-color:#c7a265;
+            }
+            QWidget#settingsPage QCheckBox::indicator:checked,
+            QWidget#settingsPage QRadioButton::indicator:checked {
+                background:#80643f; border:1px solid #c7a265;
+            }
+        """)
         layout = QVBoxLayout(page)
         layout.setContentsMargins(14, 12, 14, 14)
         title = QLabel(tr("tabs.settings"))
@@ -4165,22 +5779,59 @@ class GuildGearCheckerQt(QMainWindow):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 8, 0)
-        content_layout.setSpacing(10)
+        content = ResponsiveSettingsGrid()
+        content.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred,
+        )
 
-        feature_card = QFrame()
-        feature_card.setProperty("card", True)
-        feature_card.setMaximumWidth(860)
-        feature_layout = QVBoxLayout(feature_card)
-        feature_layout.addWidget(QLabel(tr("raid_clm_admin.optional_systems")))
+        def make_section(title_text: str) -> tuple[QFrame, QVBoxLayout]:
+            frame = QFrame()
+            frame.setProperty("card", True)
+            section_layout = QVBoxLayout(frame)
+            section_layout.setContentsMargins(14, 12, 14, 12)
+            section_layout.setSpacing(9)
+            section_title = QLabel(title_text)
+            section_title.setStyleSheet(
+                "color:#e1c183;font-weight:700;font-size:11pt;"
+                "background:transparent;border:none;"
+            )
+            section_layout.addWidget(section_title)
+            return frame, section_layout
+
+        def style_status(label: QLabel) -> None:
+            label.setObjectName("subtle")
+            label.setWordWrap(True)
+
+        # Guild identity remains project data and keeps its existing save action.
+        guild_card, guild_layout = make_section(tr("raid_clm_admin.guild_master_data"))
+        guild_fields = QGridLayout()
+        guild_fields.setHorizontalSpacing(10)
+        guild_fields.setVerticalSpacing(4)
+        guild_fields.addWidget(QLabel(tr("raid_clm_admin.guild_name")), 0, 0)
+        guild_fields.addWidget(QLabel(tr("raid_clm_admin.realm")), 0, 1)
+        self.guild_name_edit = QLineEdit()
+        self.guild_name_edit.setPlaceholderText(tr("raid_clm_admin.guild_name"))
+        self.guild_realm_edit = QLineEdit()
+        self.guild_realm_edit.setPlaceholderText(tr("raid_clm_admin.realm"))
+        guild_fields.addWidget(self.guild_name_edit, 1, 0)
+        guild_fields.addWidget(self.guild_realm_edit, 1, 1)
+        guild_fields.setColumnStretch(0, 1)
+        guild_fields.setColumnStretch(1, 1)
+        guild_layout.addLayout(guild_fields)
+        save_guild = set_button_role(
+            QPushButton(tr("raid_clm_admin.save_guild_master_data")), primary=True,
+        )
+        save_guild.clicked.connect(self.save_guild_master_data)
+        guild_layout.addWidget(save_guild, 0, Qt.AlignmentFlag.AlignLeft)
+
+        feature_card, feature_layout = make_section(tr("raid_clm_admin.optional_systems"))
         self.points_enabled_check = QCheckBox(tr("raid_clm_admin.points_system"))
         self.dkp_enabled_check = QCheckBox(tr("raid_clm_admin.dkp_mode"))
         self.points_enabled_check.toggled.connect(self._points_system_toggled)
         self.dkp_enabled_check.toggled.connect(self._dkp_mode_toggled)
         feature_layout.addWidget(self.points_enabled_check)
         scope_row = QHBoxLayout()
+        scope_row.setSpacing(8)
         scope_row.addWidget(QLabel(tr("raid_points.calculation_label")))
         self.raid_scope_all = QRadioButton(tr("raid_points.calculation_all"))
         self.raid_scope_from = QRadioButton(tr("raid_points.calculation_from"))
@@ -4193,23 +5844,53 @@ class GuildGearCheckerQt(QMainWindow):
         self.raid_scope_all.toggled.connect(self._raid_point_scope_changed)
         self.raid_scope_from.toggled.connect(self._raid_point_scope_changed)
         self.raid_scope_start.editingFinished.connect(self._raid_point_scope_changed)
-        scope_row.addWidget(self.raid_scope_all)
-        scope_row.addWidget(self.raid_scope_from)
+        scope_row.addWidget(self.raid_scope_all, 0)
+        scope_row.addWidget(self.raid_scope_from, 0)
         scope_row.addWidget(self.raid_scope_start)
         scope_row.addStretch(1)
         feature_layout.addLayout(scope_row)
         feature_layout.addWidget(self.dkp_enabled_check)
-        content_layout.addWidget(feature_card)
 
-        self.clm_group = QFrame()
-        self.clm_group.setProperty("card", True)
-        self.clm_group.setMaximumWidth(860)
-        clm_layout = QVBoxLayout(self.clm_group)
-        clm_title = QLabel(tr("raid_clm_admin.clm_title"))
-        clm_title.setStyleSheet("font-size:12pt;font-weight:700;background:transparent;border:none;")
-        clm_layout.addWidget(clm_title)
+        # Local preference fields retain their existing shared save handler.
+        local_card, local_layout = make_section(tr("checker.local_settings"))
+        gear_label = QLabel(tr("checker.gear_check_settings"))
+        gear_label.setStyleSheet("color:#d8d1c4;font-weight:600;background:transparent;border:none;")
+        local_layout.addWidget(gear_label)
+        help_label = QLabel(tr("checker.gear_check_settings_help"))
+        help_label.setObjectName("subtle")
+        help_label.setWordWrap(True)
+        local_layout.addWidget(help_label)
+        self.outdated_check = QCheckBox(tr("checker.track_outdated_checks"))
+        self.outdated_check.setChecked(self.gear_outdated_tracking)
+        local_layout.addWidget(self.outdated_check)
+        warning_row = QHBoxLayout()
+        warning_row.addWidget(QLabel(tr("checker.warn_after_days")))
+        self.outdated_days_spin = QSpinBox()
+        self.outdated_days_spin.setRange(1, 3650)
+        self.outdated_days_spin.setValue(self.gear_outdated_days)
+        warning_row.addWidget(self.outdated_days_spin)
+        warning_row.addWidget(QLabel(tr("checker.days")))
+        warning_row.addStretch(1)
+        local_layout.addLayout(warning_row)
+
+        language_row = QHBoxLayout()
+        language_row.addWidget(QLabel(tr("language.label")))
+        self.language_combo = QComboBox()
+        self.language_combo.addItems(language_display_values())
+        self.language_combo.setCurrentIndex(0 if get_language() == "de" else 1)
+        self.language_combo.setMaximumWidth(180)
+        language_row.addWidget(self.language_combo)
+        language_row.addStretch(1)
+        local_layout.addLayout(language_row)
+        save_local = set_button_role(QPushButton(tr("common.save")), primary=True)
+        save_local.clicked.connect(self.save_settings)
+        local_layout.addWidget(save_local, 0, Qt.AlignmentFlag.AlignLeft)
+
+        self.clm_group, clm_layout = make_section(tr("raid_clm_admin.clm_title"))
         path_row = QHBoxLayout()
-        path_row.addWidget(QLabel(tr("raid_clm_admin.clm_file")))
+        path_label = QLabel(tr("raid_clm_admin.clm_file"))
+        path_label.setMinimumWidth(100)
+        path_row.addWidget(path_label)
         self.clm_path_edit = QLineEdit(str(self._suite_settings.get("clm_saved_variables_path") or ""))
         self.clm_path_edit.setReadOnly(True)
         path_row.addWidget(self.clm_path_edit, 1)
@@ -4218,103 +5899,66 @@ class GuildGearCheckerQt(QMainWindow):
         path_row.addWidget(browse)
         clm_layout.addLayout(path_row)
         roster_row = QHBoxLayout()
-        roster_row.addWidget(QLabel(tr("raid_clm_admin.roster")))
+        roster_label = QLabel(tr("raid_clm_admin.roster"))
+        roster_label.setMinimumWidth(100)
+        roster_row.addWidget(roster_label)
         self.clm_roster_combo = QComboBox()
-        self.clm_roster_combo.setMinimumWidth(300)
-        roster_row.addWidget(self.clm_roster_combo)
-        roster_row.addStretch(1)
+        roster_row.addWidget(self.clm_roster_combo, 1)
         clm_layout.addLayout(roster_row)
-        refresh = set_button_role(QPushButton(tr("raid_clm_admin.refresh_dkp")), primary=True)
+        dkp_actions = QHBoxLayout()
+        refresh = QPushButton(tr("raid_clm_admin.refresh_dkp"))
         refresh.clicked.connect(self.refresh_dkp)
-        clm_layout.addWidget(refresh, 0, Qt.AlignmentFlag.AlignLeft)
-        history_sync = set_button_role(
-            QPushButton(tr("raid_clm_admin.sync_history")), primary=True,
-        )
+        dkp_actions.addWidget(refresh)
+        history_sync = QPushButton(tr("raid_clm_admin.sync_history"))
         history_sync.clicked.connect(self.sync_clm_raid_history)
-        clm_layout.addWidget(history_sync, 0, Qt.AlignmentFlag.AlignLeft)
+        dkp_actions.addWidget(history_sync)
+        dkp_actions.addStretch(1)
+        clm_layout.addLayout(dkp_actions)
         self.clm_status_label = QLabel(tr("raid_clm_admin.clm_not_refreshed"))
-        self.clm_status_label.setObjectName("subtle")
-        self.clm_status_label.setWordWrap(True)
+        style_status(self.clm_status_label)
         clm_layout.addWidget(self.clm_status_label)
-        content_layout.addWidget(self.clm_group)
 
-        self.points_group = QFrame()
-        self.points_group.setProperty("card", True)
-        self.points_group.setMaximumWidth(860)
-        points_layout = QVBoxLayout(self.points_group)
-        points_title = QLabel(tr("raid_clm_admin.points_rebuild_title"))
-        points_title.setStyleSheet("font-size:12pt;font-weight:700;background:transparent;border:none;")
-        points_layout.addWidget(points_title)
-        self.points_rebuild_button = set_button_role(
-            QPushButton(tr("raid_clm_admin.rebuild_raid_statistics")), primary=True,
+        self.points_group, points_layout = make_section(tr("raid_clm_admin.points_rebuild_title"))
+        stat_action = QHBoxLayout()
+        self.points_rebuild_button = QPushButton(
+            tr("raid_clm_admin.rebuild_raid_statistics"),
         )
         self.points_rebuild_button.clicked.connect(self.rebuild_raid_statistics)
-        points_layout.addWidget(self.points_rebuild_button, 0, Qt.AlignmentFlag.AlignLeft)
+        stat_action.addWidget(self.points_rebuild_button)
+        stat_action.addStretch(1)
+        points_layout.addLayout(stat_action)
+        raid_points_action = QHBoxLayout()
         self.raid_points_only_rebuild_button = QPushButton(tr("raid_points.rebuild_only"))
         self.raid_points_only_rebuild_button.clicked.connect(self.rebuild_raid_points)
-        points_layout.addWidget(self.raid_points_only_rebuild_button, 0, Qt.AlignmentFlag.AlignLeft)
+        raid_points_action.addWidget(self.raid_points_only_rebuild_button)
+        raid_points_action.addStretch(1)
+        points_layout.addLayout(raid_points_action)
         self.points_status_label = QLabel(tr("raid_clm_admin.raid_statistics_not_rebuilt"))
-        self.points_status_label.setObjectName("subtle")
+        style_status(self.points_status_label)
         points_layout.addWidget(self.points_status_label)
-        content_layout.addWidget(self.points_group)
-
-        card = QFrame()
-        card.setProperty("card", True)
-        card.setMaximumWidth(760)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(18, 18, 18, 18)
-        card_layout.setSpacing(12)
-
-        gear_title = QLabel(tr("checker.gear_check_settings"))
-        gear_title.setStyleSheet("font-size:12pt;font-weight:700;background:transparent;border:none;")
-        card_layout.addWidget(gear_title)
-        help_label = QLabel(tr("checker.gear_check_settings_help"))
-        help_label.setObjectName("subtle")
-        help_label.setWordWrap(True)
-        card_layout.addWidget(help_label)
-        self.outdated_check = QCheckBox(tr("checker.track_outdated_checks"))
-        self.outdated_check.setChecked(self.gear_outdated_tracking)
-        card_layout.addWidget(self.outdated_check)
-        row = QHBoxLayout()
-        row.addWidget(QLabel(tr("checker.warn_after_days")))
-        self.outdated_days_spin = QSpinBox()
-        self.outdated_days_spin.setRange(1, 3650)
-        self.outdated_days_spin.setValue(self.gear_outdated_days)
-        row.addWidget(self.outdated_days_spin)
-        row.addWidget(QLabel(tr("checker.days")))
-        row.addStretch(1)
-        card_layout.addLayout(row)
-
-        lang_row = QHBoxLayout()
-        lang_row.addWidget(QLabel(tr("language.label")))
-        self.language_combo = QComboBox()
-        self.language_combo.addItems(language_display_values())
-        self.language_combo.setCurrentIndex(0 if get_language() == "de" else 1)
-        lang_row.addWidget(self.language_combo)
-        lang_row.addStretch(1)
-        card_layout.addLayout(lang_row)
-
-        save = set_button_role(QPushButton(tr("common.save")), primary=True)
-        save.clicked.connect(self.save_settings)
-        card_layout.addWidget(save, 0, Qt.AlignmentFlag.AlignLeft)
-        content_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
 
         migration = QFrame()
         migration.setProperty("card", True)
-        migration.setMaximumWidth(760)
         mig_layout = QVBoxLayout(migration)
+        mig_layout.setContentsMargins(12, 8, 12, 8)
+        mig_layout.setSpacing(5)
         mig_title = QLabel(tr("checker.qt_migration"))
-        mig_title.setStyleSheet("font-size:12pt;font-weight:700;background:transparent;border:none;")
+        mig_title.setStyleSheet("color:#c4b18a;font-weight:600;background:transparent;border:none;")
         mig_layout.addWidget(mig_title)
         info = QLabel(tr("checker.qt_migration_help"))
         info.setObjectName("subtle")
         info.setWordWrap(True)
         mig_layout.addWidget(info)
         legacy = QPushButton(tr("checker.launch_legacy"))
+        legacy.setMaximumWidth(230)
         legacy.clicked.connect(self.launch_legacy_checker)
         mig_layout.addWidget(legacy, 0, Qt.AlignmentFlag.AlignLeft)
-        content_layout.addWidget(migration, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        content_layout.addStretch(1)
+
+        content.set_sections(
+            [guild_card, feature_card, local_card],
+            [self.clm_group, self.points_group],
+            [migration],
+        )
         scroll.setWidget(content)
         layout.addWidget(scroll, 1)
         return page
@@ -4324,6 +5968,11 @@ class GuildGearCheckerQt(QMainWindow):
         widget = self._pages.get(page)
         if widget is None:
             return
+        if (
+            self.stack.currentWidget() is self._pages.get("management")
+            and page != "management"
+        ):
+            self._flush_detail_autosave(refresh=False)
         self.stack.setCurrentWidget(widget)
         for key, button in self._nav_buttons.items():
             button.blockSignals(True)
@@ -4469,7 +6118,6 @@ class GuildGearCheckerQt(QMainWindow):
 
     def _refresh_profile_raid_list(self, character: object) -> None:
         """Show existing attendance and point projections for one member only."""
-        page = self.player_profile_page
         member_id = str(getattr(character, "member_id", ""))
         attended_raid_ids = set(getattr(character, "attended_raid_ids", ()))
         point_mode = self.model.active_point_mode()
@@ -4477,12 +6125,6 @@ class GuildGearCheckerQt(QMainWindow):
             tr("raid_points.title") if point_mode == POINT_MODE_RAID
             else tr("player_profile.dkp")
         )
-        page.character_raid_table.setHorizontalHeaderLabels((
-            tr("common.date"), tr("common.name"), tr("common.status"), point_title,
-        ))
-        page.character_raid_table.setColumnHidden(3, point_mode not in {
-            POINT_MODE_RAID, POINT_MODE_ETERNAL,
-        })
         points_by_attendance = {
             entry.attendance_id: entry
             for entry in self._point_entries()
@@ -4522,19 +6164,31 @@ class GuildGearCheckerQt(QMainWindow):
                 tr(f"raids.attendance_status_{attendance.status}"), value, raid.id,
             ))
         rows.sort(key=lambda row: (row[0], row[4]), reverse=True)
-        page.character_raid_table.setUpdatesEnabled(False)
-        try:
-            page.character_raid_table.setRowCount(len(rows))
-            for row_index, (date, name, status, value, raid_id) in enumerate(rows):
-                for column, text in enumerate((date, name, status, value)):
-                    item = QTableWidgetItem(str(text))
-                    item.setData(Qt.ItemDataRole.UserRole, raid_id)
-                    page.character_raid_table.setItem(row_index, column, item)
-        finally:
-            page.character_raid_table.setUpdatesEnabled(True)
+        for page in self._profile_views:
+            page.character_raid_table.setHorizontalHeaderLabels((
+                tr("common.date"), tr("common.name"), tr("common.status"), point_title,
+            ))
+            page.character_raid_table.setColumnHidden(3, point_mode not in {
+                POINT_MODE_RAID, POINT_MODE_ETERNAL,
+            })
+            page.character_raid_table.setUpdatesEnabled(False)
+            try:
+                page.character_raid_table.setRowCount(len(rows))
+                for row_index, (date, name, status, value, raid_id) in enumerate(rows):
+                    for column, text in enumerate((date, name, status, value)):
+                        item = QTableWidgetItem(str(text))
+                        item.setData(Qt.ItemDataRole.UserRole, raid_id)
+                        page.character_raid_table.setItem(row_index, column, item)
+            finally:
+                page.character_raid_table.setUpdatesEnabled(True)
 
-    def _render_player_profile(self, profile: PlayerProfileViewModel) -> None:
-        page = self.player_profile_page
+    def _render_player_profile(self, profile: PlayerProfileViewModel, page=None) -> None:
+        if page is None:
+            for view in self._profile_views:
+                self._render_player_profile(profile, page=view)
+            self.player_profile_page.draft_page.set_profile_family(profile)
+            self._render_profile_character(profile, refresh_options=True)
+            return
         point_mode = self.model.active_point_mode()
         page.set_point_system(point_mode)
         heading_name = profile.profile_name or tr("player_profile.no_active_main")
@@ -4558,12 +6212,16 @@ class GuildGearCheckerQt(QMainWindow):
             current_dkp=profile.current_dkp,
             point_mode=point_mode,
         )
-        self._render_profile_character(profile, refresh_options=True)
 
     def _render_profile_character(
-            self, profile: PlayerProfileViewModel, *, refresh_options: bool = False,
+            self, profile: PlayerProfileViewModel, *, refresh_options: bool = False, page=None,
     ) -> None:
-        page = self.player_profile_page
+        if page is None:
+            for view in self._profile_views:
+                self._render_profile_character(profile, refresh_options=refresh_options, page=view)
+            if profile.selected_character is not None:
+                self._refresh_profile_raid_list(profile.selected_character)
+            return
         if refresh_options:
             page.set_character_options((
                 (
@@ -4588,22 +6246,27 @@ class GuildGearCheckerQt(QMainWindow):
         )
         character = profile.selected_character
         if character is None:
-            self._clear_profile_character()
+            self._clear_profile_character(page=page)
             return
         member = self.model.find_by_id(character.member_id)
         if member is None:
-            self._clear_profile_character()
+            self._clear_profile_character(page=page)
             return
         page.character_name.setText(character.name)
         race_text = race_display(character.race) if character.race else tr("common.not_set")
         class_text = profile_class_display(character.class_name) or tr("common.not_set")
         page.character_identity_line.setText(f"{race_text} – {class_text}")
+        if isinstance(page, PlayerProfileDraftPage):
+            page.character_identity_line.setStyleSheet(f"color:{CLASS_COLORS.get(character.class_name, MUTED)};")
+            set_roster_status(page.character_life, "positive" if character.life_status == "active" else
+                              "warning" if character.life_status == "inactive" else "negative")
+            set_roster_status(page.character_type, "neutral")
         page.character_spec.setText(character.spec or tr("common.not_set"))
         page.character_type.setText(character_type_display(character.character_type))
         page.character_life.setText(tr(f"life.{character.life_status}"))
         page.character_rank.setText(self._rank_text_for_member(member))
         self._set_external_rank_icon(
-            page.player_rank_icon, self._rank_path_for_member(member, 96), 96,
+            page.player_rank_icon, self._rank_path_for_member(member, 96), page.player_rank_icon.width(),
         )
         if character.life_status == "dead":
             try:
@@ -4636,10 +6299,12 @@ class GuildGearCheckerQt(QMainWindow):
             current_dkp=character.current_dkp,
             point_mode=self.model.active_point_mode(),
         )
-        self._refresh_profile_raid_list(character)
 
-    def _clear_profile_character(self) -> None:
-        page = self.player_profile_page
+    def _clear_profile_character(self, page=None) -> None:
+        if page is None:
+            for view in self._profile_views:
+                self._clear_profile_character(page=view)
+            return
         page.player_portrait.clear_source()
         page.character_name.setText(tr("player_profile.no_character"))
         for label in (
@@ -4697,7 +6362,11 @@ class GuildGearCheckerQt(QMainWindow):
     def refresh_member_table(self, select_first: bool = False) -> None:
         if not hasattr(self, "member_table"):
             return
+        self._flush_detail_autosave(refresh=False)
         visible = self._filtered_members()
+        last_raid_dates = latest_raid_dates_by_member_id(
+            self.model.raids, self.model.raid_attendance,
+        )
         old_id = self.selected_member_id
         self._member_table_refreshing = True
         self.member_table.blockSignals(True)
@@ -4705,6 +6374,7 @@ class GuildGearCheckerQt(QMainWindow):
         self.member_table.setRowCount(len(visible))
         try:
             for row, member in enumerate(visible):
+                assigned_main = self.model.associated_main(member)
                 values = (
                     member.name,
                     race_display(member.race) if member.race else tr("common.not_set"),
@@ -4715,16 +6385,21 @@ class GuildGearCheckerQt(QMainWindow):
                     gear_status_display(member.gearStatus),
                     raid_status_display(member.raidStatus),
                     member.lastChecked or "–",
+                    last_raid_dates.get(member.id, "–"),
+                    assigned_main.name if assigned_main is not None else "–",
                 )
                 for column, value in enumerate(values):
-                    item = QTableWidgetItem(str(value))
+                    item = (
+                        OptionalIsoDateItem(str(value))
+                        if column == 9 else QTableWidgetItem(str(value))
+                    )
                     item.setData(Qt.ItemDataRole.UserRole, member.id)
                     if column == 2 and member.className in CLASS_COLORS:
                         item.setForeground(QColor(CLASS_COLORS[member.className]))
                         icon_path = class_icon_path(member.className)
                         if icon_path.is_file():
                             item.setIcon(QIcon(str(icon_path)))
-                    if column == 8:
+                    if column in {8, 9, 10}:
                         item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                     self.member_table.setItem(row, column, item)
         finally:
@@ -4745,6 +6420,46 @@ class GuildGearCheckerQt(QMainWindow):
             self.show_member(target)
         elif not visible:
             self.clear_detail()
+
+    def _detail_discrete_changed(self, *_args) -> None:
+        if self._detail_loading or self._detail_autosave_in_progress:
+            return
+        if self.model.find_by_id(self.selected_member_id or "") is None:
+            return
+        self._detail_autosave_dirty = True
+        self._detail_autosave_timer.stop()
+        self._flush_detail_autosave(refresh=True)
+
+    def _detail_text_changed(self) -> None:
+        if self._detail_loading or self._detail_autosave_in_progress:
+            return
+        if self.model.find_by_id(self.selected_member_id or "") is None:
+            return
+        self._detail_autosave_dirty = True
+        self._detail_autosave_timer.start()
+
+    def _flush_detail_autosave(self, *, refresh: bool) -> bool:
+        if (
+            not self._detail_autosave_dirty
+            or self._detail_loading
+            or self._detail_autosave_in_progress
+        ):
+            return False
+        member_id = self.selected_member_id or ""
+        if self.model.find_by_id(member_id) is None:
+            self._detail_autosave_dirty = False
+            self._detail_autosave_timer.stop()
+            return False
+        self._detail_autosave_timer.stop()
+        self._detail_autosave_in_progress = True
+        try:
+            saved = self.save_selected_member(refresh=refresh)
+        finally:
+            self._detail_autosave_in_progress = False
+        if not saved:
+            self._detail_autosave_dirty = False
+            self.show_member(member_id)
+        return saved
 
     def _member_table_item_changed(self, item: QTableWidgetItem) -> None:
         if self._member_table_refreshing:
@@ -4782,8 +6497,9 @@ class GuildGearCheckerQt(QMainWindow):
         rows = [line.split("\t") for line in text.replace("\r\n", "\n").split("\n") if line]
         if not rows:
             return
-        start_row, start_column = current.row(), current.column()
-        protected = {4, 8}
+        header = self.member_table.horizontalHeader()
+        start_row, start_column = current.row(), header.visualIndex(current.column())
+        protected = {4, 8, 9, 10}
         edits: list[tuple[Member, int, str]] = []
         for row_offset, values in enumerate(rows):
             table_row = start_row + row_offset
@@ -4796,8 +6512,9 @@ class GuildGearCheckerQt(QMainWindow):
                 QMessageBox.warning(self, APP_NAME, tr("checker.paste_out_of_range"))
                 return
             for column_offset, value in enumerate(values):
-                column = start_column + column_offset
-                if column >= len(MemberTable.COLUMNS) or column in protected:
+                visual_column = start_column + column_offset
+                column = header.logicalIndex(visual_column)
+                if column < 0 or column in protected:
                     QMessageBox.warning(self, APP_NAME, tr("checker.paste_protected"))
                     return
                 edits.append((member, column, value))
@@ -4934,6 +6651,9 @@ class GuildGearCheckerQt(QMainWindow):
         current: QTableWidgetItem | None,
         _previous: QTableWidgetItem | None,
     ) -> None:
+        next_id = str(current.data(Qt.ItemDataRole.UserRole) or "") if current else ""
+        if next_id and next_id != self.selected_member_id:
+            self._flush_detail_autosave(refresh=False)
         self._show_member_for_table_item(current)
 
     def _show_member_for_table_item(self, item: QTableWidgetItem | None) -> None:
@@ -5156,10 +6876,16 @@ class GuildGearCheckerQt(QMainWindow):
         member = self.model.find_by_id(member_id)
         if member is None:
             return
+        if member.id != self.selected_member_id:
+            self._flush_detail_autosave(refresh=False)
+        self._detail_loading = True
         self.selected_member_id = member.id
         self.detail_name.setText(member.name)
         class_line = " · ".join(value for value in (member.className, member.spec) if value) or "–"
         self.detail_class.setText(class_line)
+        self.detail_class.setStyleSheet(
+            f"color:{CLASS_COLORS.get(member.className, MUTED)};background:transparent;border:none;"
+        )
         self.detail_life.setText(tr(f"life.{member.lifeStatus}"))
         portrait = member_portrait_path(self.model, member)
         self.detail_portrait.set_source(portrait)
@@ -5177,6 +6903,7 @@ class GuildGearCheckerQt(QMainWindow):
         self.class_combo.blockSignals(True)
         self.class_combo.setCurrentText(member.className or tr("common.not_set"))
         self.class_combo.blockSignals(False)
+        self.class_combo.refresh_class_color()
         self._update_spec_combo(member.className, member.spec)
         self.character_type_combo.blockSignals(True)
         self.character_type_combo.setCurrentText(character_type_display(member.characterType))
@@ -5212,13 +6939,19 @@ class GuildGearCheckerQt(QMainWindow):
             self.activity_button.setText(tr("checker.reanimate_dead"))
             self.activity_button.setEnabled(True)
             self.life_button.setVisible(False)
+        self._detail_autosave_dirty = False
+        self._detail_autosave_timer.stop()
+        self._detail_loading = False
 
     def clear_detail(self) -> None:
+        self._flush_detail_autosave(refresh=False)
         self.selected_member_id = None
         if not hasattr(self, "detail_name"):
             return
+        self._detail_loading = True
         self.detail_name.setText("–")
         self.detail_class.setText("–")
+        self.detail_class.setStyleSheet(f"color:{MUTED};background:transparent;border:none;")
         self.detail_life.setText("–")
         self.detail_portrait.clear_source()
         self.detail_reward_portrait.clear_reward_badge()
@@ -5229,6 +6962,7 @@ class GuildGearCheckerQt(QMainWindow):
         self.class_combo.blockSignals(True)
         self.class_combo.setCurrentIndex(0)
         self.class_combo.blockSignals(False)
+        self.class_combo.refresh_class_color()
         self._update_spec_combo("", "")
         self.character_type_combo.setCurrentIndex(0)
         self.associated_main_combo.clear()
@@ -5243,9 +6977,19 @@ class GuildGearCheckerQt(QMainWindow):
         self.detail_points_form.setRowVisible(self.detail_player_points, False)
         self.detail_player_history.setVisible(False)
         self.detail_dkp_value.setText("—")
+        self._detail_autosave_dirty = False
+        self._detail_autosave_timer.stop()
+        self._detail_loading = False
 
     def _class_changed(self, value: str) -> None:
-        self._update_spec_combo(normalize_class_name(value), "")
+        was_loading = self._detail_loading
+        self._detail_loading = True
+        try:
+            self._update_spec_combo(normalize_class_name(value), "")
+        finally:
+            self._detail_loading = was_loading
+        if not was_loading:
+            self._detail_discrete_changed()
 
     def _detail_character_type_changed(self, _value: str) -> None:
         member = self.model.find_by_id(self.selected_member_id or "")
@@ -5285,10 +7029,10 @@ class GuildGearCheckerQt(QMainWindow):
         valid = normalize_spec(cls, selected)
         self.spec_combo.setCurrentText(valid or tr("common.not_set"))
 
-    def save_selected_member(self) -> None:
+    def save_selected_member(self, _checked: bool = False, *, refresh: bool = True) -> bool:
         member = self.model.find_by_id(self.selected_member_id or "")
         if member is None:
-            return
+            return False
         class_name = normalize_class_name(self.class_combo.currentText())
         spec = normalize_spec(class_name, self.spec_combo.currentText())
         character_type = character_type_from_display(self.character_type_combo.currentText())
@@ -5306,14 +7050,14 @@ class GuildGearCheckerQt(QMainWindow):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if answer != QMessageBox.StandardButton.Yes:
-                return
+                return False
             self.model.assign_character_type(
                 member.id, character_type, associated_main_id, raid_role,
                 replace_existing_main=True,
             )
         except ValueError as exc:
             QMessageBox.warning(self, APP_NAME, str(exc))
-            return
+            return False
 
         old_gear, old_raid = member.gearStatus, member.raidStatus
         member.race = race_from_display(self.race_combo.currentText())
@@ -5327,15 +7071,19 @@ class GuildGearCheckerQt(QMainWindow):
             member.lastChecked = today_iso()
         self.model.dirty = True
         self.autosave()
+        self._detail_autosave_dirty = False
+        self._detail_autosave_timer.stop()
         if old_assignment != (member.playerId, member.characterType):
             self._rebuild_raid_derived_state()
-        self.refresh_all(select_first=False)
-        current_item = self.member_table.currentItem()
-        current_id = str(current_item.data(Qt.ItemDataRole.UserRole) or "") if current_item else ""
-        if current_id != member.id:
-            self._select_member_in_table(member.id)
-            self.show_member(member.id)
+        if refresh:
+            self.refresh_all(select_first=False)
+            current_item = self.member_table.currentItem()
+            current_id = str(current_item.data(Qt.ItemDataRole.UserRole) or "") if current_item else ""
+            if current_id != member.id:
+                self._select_member_in_table(member.id)
+                self.show_member(member.id)
         self.set_status(tr("checker.saved", name=member.name))
+        return True
 
 
     def confirm_recheck_selected(self) -> None:
@@ -5712,17 +7460,51 @@ class GuildGearCheckerQt(QMainWindow):
         self.set_status(tr("checker.marked_dead", name=member.name))
 
     # ---------- roster ----------
+    def _roster_zoom_min(self) -> int:
+        return (
+            ROSTER_DRAFT_ZOOM_MIN
+            if self._roster_presentation == "draft"
+            else ROSTER_CLASSIC_ZOOM_MIN
+        )
+
+    def _sync_roster_zoom_range(self) -> None:
+        minimum = self._roster_zoom_min()
+        value = max(minimum, min(ROSTER_ZOOM_MAX, self._roster_zoom_percent))
+        self.roster_zoom_slider.blockSignals(True)
+        self.roster_zoom_slider.setRange(minimum, ROSTER_ZOOM_MAX)
+        self.roster_zoom_slider.setValue(value)
+        self.roster_zoom_slider.blockSignals(False)
+        if value != self._roster_zoom_percent:
+            self._roster_zoom_percent = value
+            self._roster_cards_dirty = True
+        self._roster_zoom_pending = value
+        self.roster_zoom_value.setText(f"{value} %")
+
     def _schedule_roster_zoom(self, value: int) -> None:
-        self._roster_zoom_pending = max(60, min(140, int(value)))
+        self._roster_zoom_pending = max(
+            self._roster_zoom_min(), min(ROSTER_ZOOM_MAX, int(value)),
+        )
         if hasattr(self, "roster_zoom_value"):
             self.roster_zoom_value.setText(f"{self._roster_zoom_pending} %")
         self._roster_zoom_timer.start()
 
     def _apply_roster_zoom(self) -> None:
-        value = max(60, min(140, int(self._roster_zoom_pending)))
+        value = max(
+            self._roster_zoom_min(), min(ROSTER_ZOOM_MAX, int(self._roster_zoom_pending)),
+        )
         if value == self._roster_zoom_percent:
             return
         self._roster_zoom_percent = value
+        if self._roster_uses_draft() and self._roster_cards:
+            gap = max(8, round(14 * value / 100.0))
+            card_width, _portrait_width, _portrait_height = RosterDraftCard.metrics_for_zoom(value)
+            for card in self._roster_cards:
+                if isinstance(card, RosterDraftCard):
+                    card.set_zoom_percent(value)
+            for grid in self._roster_grids:
+                grid.set_card_metrics(card_width, gap)
+            self._schedule_roster_reflow()
+            return
         self._roster_cards_dirty = True
         if self._roster_view_mode == "cards":
             self._refresh_current_roster_view()
@@ -5761,14 +7543,21 @@ class GuildGearCheckerQt(QMainWindow):
         }
         factor = self._roster_zoom_percent / 100.0
         gap = max(8, round(14 * factor))
-        card_width = max(122, round(RosterCard.BASE_CARD_WIDTH * factor))
+        draft = self._roster_uses_draft()
+        card_width = (RosterDraftCard.metrics_for_zoom(self._roster_zoom_percent)[0] if draft
+                      else max(122, round(RosterCard.BASE_CARD_WIDTH * factor)))
         for role in ROSTER_ROLE_ORDER:
             members = groups.get(role, [])
             section = QFrame()
-            section.setObjectName("rosterSection")
+            section.setObjectName("rosterDraftSection" if draft else "rosterSection")
+            if draft:
+                section.setStyleSheet("background:transparent;border:none;")
             section_layout = QVBoxLayout(section)
             section_margin = max(7, round(12 * min(1.0, factor)))
-            section_layout.setContentsMargins(section_margin, section_margin, section_margin, section_margin)
+            section_layout.setContentsMargins(
+                0 if draft else section_margin, section_margin,
+                0 if draft else section_margin, section_margin,
+            )
             section_layout.setSpacing(max(5, round(8 * factor)))
 
             heading = QLabel(f"{role_labels[role]}   {len(members)}")
@@ -5779,18 +7568,33 @@ class GuildGearCheckerQt(QMainWindow):
                 f"font-size:{heading_size}pt;font-weight:700;color:{heading_color};"
                 "background:transparent;border:none;"
             )
-            section_layout.addWidget(heading)
+            if draft:
+                role_row = QHBoxLayout()
+                role_row.setSpacing(9)
+                role_row.addWidget(RosterRoleIcon(role))
+                role_row.addWidget(heading)
+                line = QFrame()
+                line.setFixedHeight(1)
+                line.setStyleSheet("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #927347,stop:1 #202a32);")
+                role_row.addWidget(line, 1)
+                ornament = QLabel("◆")
+                ornament.setStyleSheet("color:#927347;background:transparent;")
+                role_row.addWidget(ornament)
+                section_layout.addLayout(role_row)
+            else:
+                section_layout.addWidget(heading)
 
             if members:
                 grid = ResponsiveCardGrid(card_width, gap=gap)
                 cards: list[QWidget] = []
                 for member in members:
-                    card = RosterCard(
-                        self.model,
-                        member,
-                        self._roster_zoom_percent,
-                        rank_path=self._rank_path_for_member(member, 96),
-                    )
+                    rank_path = self._rank_path_for_member(member, 96)
+                    if draft:
+                        card = RosterDraftCard(
+                            self.model, member, self._roster_zoom_percent, rank_path,
+                        )
+                    else:
+                        card = RosterCard(self.model, member, self._roster_zoom_percent, rank_path=rank_path)
                     card.clicked.connect(self._roster_card_clicked)
                     cards.append(card)
                     self._roster_cards.append(card)
@@ -5806,6 +7610,7 @@ class GuildGearCheckerQt(QMainWindow):
 
             self.roster_layout.addWidget(section)
         self.roster_layout.addStretch(1)
+        self._apply_roster_card_selection()
 
     def _rebuild_roster_list(self, groups: dict[str, list[Member]]) -> None:
         visible_members = [member for role in ROSTER_ROLE_ORDER for member in groups[role]]
@@ -5883,6 +7688,7 @@ class GuildGearCheckerQt(QMainWindow):
         if member is None or member.lifeStatus != "active":
             return
         self.roster_selected_member_id = member.id
+        self._apply_roster_card_selection()
         self.roster_detail_name.setText(member.name)
         race_text = race_display(member.race) if member.race else tr("common.not_set")
         class_text = member.className or tr("common.not_set")
@@ -5900,10 +7706,18 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_detail_life.setText(tr(f"life.{member.lifeStatus}"))
         raid_status = member.raidStatus or ""
         self.roster_detail_raid.setText(raid_status_display(raid_status))
-        self.roster_detail_raid.setStyleSheet(
-            "background:#355f45;" if raid_status == "Bereit" else
-            ("background:#633b40;" if raid_status == "Nicht bereit" else "")
-        )
+        if self._roster_uses_draft():
+            set_roster_status(self.roster_detail_life,
+                              "positive" if member.lifeStatus == "active" else
+                              "warning" if member.lifeStatus == "inactive" else "negative")
+            set_roster_status(self.roster_detail_raid,
+                              "positive" if raid_status == "Bereit" else
+                              "negative" if raid_status == "Nicht bereit" else "neutral")
+        else:
+            self.roster_detail_raid.setStyleSheet(
+                "background:#355f45;" if raid_status == "Bereit" else
+                ("background:#633b40;" if raid_status == "Nicht bereit" else "")
+            )
         self.roster_detail_portrait.set_source(member_portrait_path(self.model, member))
         self._set_member_reward_visuals(
             member,
@@ -5943,15 +7757,23 @@ class GuildGearCheckerQt(QMainWindow):
 
     # ---------- graveyard ----------
     def _schedule_graveyard_zoom(self, value: int) -> None:
-        self._graveyard_zoom_pending = max(60, min(140, int(value)))
+        self._graveyard_zoom_pending = max(40, min(140, int(value)))
         self._graveyard_zoom_timer.start()
+        self._graveyard_zoom_save_timer.start()
 
     def _apply_graveyard_zoom(self) -> None:
-        value = max(60, min(140, int(self._graveyard_zoom_pending)))
+        value = max(40, min(140, int(self._graveyard_zoom_pending)))
         if value == self._graveyard_zoom_percent:
             return
         self._graveyard_zoom_percent = value
-        self.refresh_graveyard()
+        self.grave_canvas.set_zoom_percent(value)
+
+    def _persist_graveyard_zoom(self) -> None:
+        value = max(40, min(140, int(self._graveyard_zoom_pending)))
+        self._suite_settings["graveyard_zoom_percent"] = value
+        update_suite_settings(
+            self._suite_settings_path, graveyard_zoom_percent=value,
+        )
 
     def refresh_graveyard(self) -> None:
         dead = [member for member in self.model.members if member.lifeStatus == "dead"]
@@ -5964,11 +7786,7 @@ class GuildGearCheckerQt(QMainWindow):
         except Exception:
             by_id = {}
 
-        factor = self._graveyard_zoom_percent / 100.0
-        render_size = (
-            max(96, round(GRAVESTONE_CARD_SIZE[0] * factor)),
-            max(132, round(GRAVESTONE_CARD_SIZE[1] * factor)),
-        )
+        render_size = GRAVESTONE_CARD_SIZE
         self._grave_pixmaps.clear()
         cards: list[tuple[str, QPixmap]] = []
         for member in dead:
@@ -6442,6 +8260,13 @@ class GuildGearCheckerQt(QMainWindow):
                 self.raid_subtabs.removeTab(history_index)
                 history_index = -1
             self.point_history_tab_index = history_index
+            dkp_index = self.raid_subtabs.indexOf(self.dkp_history_page)
+            if mode == POINT_MODE_ETERNAL and dkp_index < 0:
+                self.raid_subtabs.addTab(self.dkp_history_page, tr("dkp_history.tab"))
+            elif mode != POINT_MODE_ETERNAL and dkp_index >= 0:
+                if self.raid_subtabs.currentIndex() == dkp_index:
+                    self.raid_subtabs.setCurrentIndex(0)
+                self.raid_subtabs.removeTab(dkp_index)
         if hasattr(self, "detail_points_section"):
             self.detail_points_section.setVisible(enabled)
         if hasattr(self, "roster_points_section"):
@@ -6516,6 +8341,40 @@ class GuildGearCheckerQt(QMainWindow):
         self.point_history_subject.blockSignals(False)
         self.refresh_point_history(force=force)
 
+    def _populate_dkp_history_subjects(self, *, force: bool = True) -> None:
+        if not force and not self._raid_view_dirty["dkp_history"]:
+            return
+        current = self.dkp_history_subject.currentData()
+        mode = str(self.dkp_history_mode.currentData() or "player")
+        records = self.model.eternal_dkp.records
+        members = {member.id: member for member in self.model.members}
+        if mode == "player":
+            players = {player.playerId: player for player in self.model.players}
+            player_ids = {
+                members[record.member_id].playerId for record in records
+                if record.member_id in members and members[record.member_id].playerId
+            }
+            options = [
+                (players[player_id].playerName if player_id in players else player_id, player_id)
+                for player_id in player_ids
+            ]
+        else:
+            names = {record.member_id: record.character_name for record in records}
+            names.update({member_id: members[member_id].name for member_id in names if member_id in members})
+            options = [(name, member_id) for member_id, name in names.items() if member_id]
+        options.sort(key=lambda item: (item[0].casefold(), item[1]))
+        self.dkp_history_subject.blockSignals(True)
+        try:
+            self.dkp_history_subject.clear()
+            for label, identifier in options:
+                self.dkp_history_subject.addItem(label, identifier)
+            index = self.dkp_history_subject.findData(current)
+            if index >= 0:
+                self.dkp_history_subject.setCurrentIndex(index)
+        finally:
+            self.dkp_history_subject.blockSignals(False)
+        self.refresh_dkp_history(force=force)
+
     def _matrix_subject_options(self, mode: str) -> list[tuple[str, str]]:
         if mode == "player":
             players = {player.playerId: player for player in self.model.players}
@@ -6562,10 +8421,17 @@ class GuildGearCheckerQt(QMainWindow):
         )
         # A filter from the other view must never remain active invisibly.
         self._populate_matrix_subjects(reset=True)
-        self._refresh_attendance_combined()
+        self._refresh_attendance_immediately()
 
     def _refresh_attendance_combined(self) -> None:
         self.refresh_raid_matrix()
+
+    def _schedule_attendance_text_filter(self, *_args) -> None:
+        self._attendance_text_filter_timer.start()
+
+    def _refresh_attendance_immediately(self, *_args) -> None:
+        self._attendance_text_filter_timer.stop()
+        self._refresh_attendance_combined()
 
     def _toggle_attendance_matrix(self, collapsed: bool) -> None:
         sizes = self.attendance_matrix_split.sizes()
@@ -6629,6 +8495,81 @@ class GuildGearCheckerQt(QMainWindow):
                 self.raid_table.scrollToItem(raid_item)
                 return
 
+    def refresh_dkp_history(self, *, force: bool = True) -> None:
+        if not force and not self._raid_view_dirty["dkp_history"]:
+            return
+        mode = str(self.dkp_history_mode.currentData() or "player")
+        subject_id = str(self.dkp_history_subject.currentData() or "")
+        members = {member.id: member for member in self.model.members}
+        raids = {raid.id: raid for raid in self.model.raids}
+        records = [
+            record for record in self.model.eternal_dkp.records
+            if subject_id and (
+                record.member_id == subject_id if mode == "character"
+                else members.get(record.member_id) is not None
+                and members[record.member_id].playerId == subject_id
+            )
+        ]
+        records.sort(key=lambda record: (record.timestamp, record.event_id), reverse=True)
+        table = self.dkp_history_table
+        header = table.horizontalHeader()
+        sort_column = header.sortIndicatorSection()
+        sort_order = header.sortIndicatorOrder()
+        table.setSortingEnabled(False)
+        table.setUpdatesEnabled(False)
+        try:
+            table.setRowCount(len(records))
+            for row, record in enumerate(records):
+                raid = raids.get(record.raid_id)
+                source = (
+                    f"{raid.date} {raid.name}" if raid is not None
+                    else tr("dkp_history.clm_source", id=record.clm_raid_id)
+                    if record.clm_raid_id else "–"
+                )
+                date = (
+                    datetime.fromtimestamp(record.timestamp).strftime("%Y-%m-%d %H:%M")
+                    if record.timestamp > 0 else "–"
+                )
+                change = (
+                    ("+" if record.value >= 0 else "")
+                    + self._format_dkp_value(record.value)
+                )
+                values = (
+                    date, source, record.character_name,
+                    tr(f"dkp_history.kind_{record.kind.lower()}"),
+                    change, record.description or "–",
+                )
+                for column, value in enumerate(values):
+                    item = NumericSortItem(str(value)) if column in (0, 4) else QTableWidgetItem(str(value))
+                    if column == 0:
+                        item.setData(int(Qt.ItemDataRole.UserRole) + 1, record.timestamp)
+                    elif column == 4:
+                        item.setData(int(Qt.ItemDataRole.UserRole) + 1, record.value)
+                    elif column == 2:
+                        member = members.get(record.member_id)
+                        if member is not None and member.className in CLASS_COLORS:
+                            item.setForeground(QColor(CLASS_COLORS[member.className]))
+                    item.setData(Qt.ItemDataRole.UserRole, raid.id if raid is not None else "")
+                    table.setItem(row, column, item)
+        finally:
+            table.setUpdatesEnabled(True)
+            table.setSortingEnabled(True)
+        table.sortItems(sort_column, sort_order)
+        self._raid_view_dirty["dkp_history"] = False
+
+    def _open_dkp_history_raid(self, row: int) -> None:
+        item = self.dkp_history_table.item(row, 0)
+        raid_id = str(item.data(Qt.ItemDataRole.UserRole) or "") if item else ""
+        if not raid_id:
+            return
+        self.raid_subtabs.setCurrentWidget(self.raids_page)
+        for raid_row in range(self.raid_table.rowCount()):
+            raid_item = self.raid_table.item(raid_row, 0)
+            if raid_item and raid_item.data(Qt.ItemDataRole.UserRole) == raid_id:
+                self.raid_table.selectRow(raid_row)
+                self.raid_table.scrollToItem(raid_item)
+                return
+
     def open_point_history_for_member(self, member_id: str) -> None:
         if not self.model.raid_points.enabled or not member_id:
             return
@@ -6656,7 +8597,8 @@ class GuildGearCheckerQt(QMainWindow):
     def _invalidate_raid_views(self) -> None:
         """Keep expensive raid views lazy until their tab is actually visible."""
         self._raid_view_dirty.update({
-            "raids": True, "attendance": True, "matrix": True, "history": True,
+            "raids": True, "attendance": True, "matrix": True,
+            "history": True, "dkp_history": True,
         })
 
     def _raid_subtab_changed(self, _index: int) -> None:
@@ -6667,6 +8609,8 @@ class GuildGearCheckerQt(QMainWindow):
             self.refresh_raid_matrix(force=False)
         elif page is self.point_history_page:
             self._populate_point_history_subjects(force=False)
+        elif page is self.dkp_history_page:
+            self._populate_dkp_history_subjects(force=False)
 
     def _refresh_current_raid_tab(self) -> None:
         self._raid_subtab_changed(self.raid_subtabs.currentIndex())
@@ -6715,9 +8659,14 @@ class GuildGearCheckerQt(QMainWindow):
                     item = QTableWidgetItem(value)
                     if col == 0:
                         item.setData(Qt.ItemDataRole.UserRole, raid.id)
+                    if col == 4:
+                        item.setForeground(QColor(
+                            "#8ec79a" if raid.status == "recorded" else "#e1c183"
+                        ))
                     if col == 5 and raid.warcraftLogsUrl:
+                        item.setData(Qt.ItemDataRole.UserRole, raid.warcraftLogsUrl)
                         item.setToolTip(raid.warcraftLogsUrl)
-                        item.setForeground(QColor("#7fb7ff"))
+                        item.setForeground(QColor("#c7a265"))
                     self.raid_table.setItem(row, col, item)
                 if raid.id == selected_id:
                     self.raid_table.selectRow(row)
@@ -6810,23 +8759,32 @@ class GuildGearCheckerQt(QMainWindow):
                 if column == 0:
                     item.setData(Qt.ItemDataRole.UserRole, entry.playerId)
                 elif column == 1:
+                    item.setData(
+                        Qt.ItemDataRole.UserRole,
+                        character.id if character is not None else "",
+                    )
                     self._apply_character_presentation(item, character)
                 elif column == 3 and entry.status == "bench":
-                    item.setBackground(QColor("#6d5418"))
-                    item.setForeground(QColor("#ffffff"))
+                    item.setForeground(QColor("#e1c183"))
+                elif column == 3 and entry.status == "present":
+                    item.setForeground(QColor("#8ec79a"))
                 self.raid_participants_table.setItem(row, column, item)
         self.raid_participants_table.setSortingEnabled(True)
         self.raid_toggle_bench_button.setEnabled(bool(entries))
         self.raid_points_button.setEnabled(bool(entries))
+        self._update_selected_raid_header(len(entries))
 
-    @staticmethod
-    def _apply_character_presentation(item: QTableWidgetItem, member) -> None:
-        """Apply the existing class icon and colour to a character-name item."""
+    def _apply_character_presentation(self, item: QTableWidgetItem, member) -> None:
+        """Apply the existing icon and, in the draft, the class colour."""
         if member is None or not member.className:
             return
         icon_path = class_icon_path(member.className)
         if icon_path.is_file():
             item.setIcon(QIcon(str(icon_path)))
+        if member.className in CLASS_COLORS:
+            item.setForeground(QColor(CLASS_COLORS[member.className]))
+        else:
+            item.setData(Qt.ItemDataRole.ForegroundRole, None)
 
     def _sync_matrix_vertical_scroll(self, target: QTableWidget, value: int) -> None:
         if self._matrix_syncing_scroll:
@@ -6836,6 +8794,19 @@ class GuildGearCheckerQt(QMainWindow):
             target.verticalScrollBar().setValue(value)
         finally:
             self._matrix_syncing_scroll = False
+
+    def _attendance_stats_section_resized(
+        self, logical_index: int, _old_width: int, new_width: int,
+    ) -> None:
+        if 0 <= logical_index < RAID_ATTENDANCE_FIXED_COLUMNS:
+            self._attendance_stats_column_widths[logical_index] = max(40, int(new_width))
+
+    def _attendance_matrix_section_resized(
+        self, logical_index: int, _old_width: int, new_width: int,
+    ) -> None:
+        if 0 <= logical_index < len(self._matrix_raids):
+            raid_id = self._matrix_raids[logical_index].id
+            self._attendance_matrix_column_widths[raid_id] = max(40, int(new_width))
 
     def toggle_selected_attendance_status(self) -> None:
         raid = self._selected_raid()
@@ -7205,6 +9176,8 @@ class GuildGearCheckerQt(QMainWindow):
             self._raid_view_dirty["matrix"] or self._raid_view_dirty["attendance"]
         ):
             return
+        if hasattr(self, "_attendance_text_filter_timer"):
+            self._attendance_text_filter_timer.stop()
 
         raids = self._scoped_raids("matrix")
         rows = self._attendance_rows_for_scope(raids)
@@ -7244,16 +9217,30 @@ class GuildGearCheckerQt(QMainWindow):
             stats_table.setRowCount(len(rows))
             stats_table.setColumnCount(RAID_ATTENDANCE_FIXED_COLUMNS)
             stats_table.setHorizontalHeaderLabels(fixed_headers)
-            stats_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
-            for column in range(1, RAID_ATTENDANCE_FIXED_COLUMNS):
-                stats_header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+            stats_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+            stats_table.setColumnWidth(0, self._attendance_stats_column_widths.get(0, 175))
+            for column, width in enumerate(RAID_MATRIX_STAT_COLUMN_WIDTHS, start=1):
+                stats_table.setColumnWidth(
+                    column, self._attendance_stats_column_widths.get(column, width),
+                )
 
             matrix_table.setRowCount(len(rows))
             matrix_table.setColumnCount(len(raids))
             matrix_table.setHorizontalHeaderLabels(raid_headers)
-            matrix_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             for column in range(len(raids)):
-                matrix_table.setColumnWidth(column, 74)
+                matrix_table.setColumnWidth(
+                    column,
+                    self._attendance_matrix_column_widths.get(raids[column].id, 74),
+                )
+                header_item = matrix_table.horizontalHeaderItem(column)
+                if header_item is not None:
+                    tooltip = f"{raids[column].name}\n{raids[column].date}"
+                    if raids[column].warcraftLogsUrl:
+                        tooltip += (
+                            f"\n{tr('raids.warcraft_logs')}: "
+                            f"{raids[column].warcraftLogsUrl}"
+                        )
+                    header_item.setToolTip(tooltip)
 
             lookup = self.model.attendance_lookup()
             member_lookup = {
@@ -7282,6 +9269,22 @@ class GuildGearCheckerQt(QMainWindow):
                     if column == 0:
                         item.setData(Qt.ItemDataRole.UserRole, info["identifier"])
                         self._apply_character_presentation(item, member)
+                        if member is not None and member.className in CLASS_COLORS:
+                            item.setForeground(QColor(CLASS_COLORS[member.className]))
+                    elif column == 1:
+                        font = item.font()
+                        font.setBold(True)
+                        item.setFont(font)
+                        item.setForeground(QColor("#e1c183"))
+                    elif column in {2, 3, 4}:
+                        font = item.font()
+                        font.setWeight(QFont.Weight.DemiBold)
+                        item.setFont(font)
+                    else:
+                        item.setForeground(QColor(MUTED))
+                        font = item.font()
+                        font.setPointSize(max(8, font.pointSize() - 1))
+                        item.setFont(font)
                     stats_table.setItem(row, column, item)
 
                 stats_table.setRowHeight(row, RAID_MATRIX_ROW_HEIGHT)
@@ -7419,6 +9422,7 @@ class GuildGearCheckerQt(QMainWindow):
         dialog = BulkRaidImportDialog(
             self, self.model, Path(folder), self._suite_settings_path,
         )
+        dialog.projectDataChanged.connect(self.autosave)
         dialog.exec()
         result = dialog.result_value
         if result is None or result.imported <= 0:
@@ -7800,6 +9804,10 @@ class GuildGearCheckerQt(QMainWindow):
     def _reset_project_services(self) -> None:
         self._clm_refresh_service = ClmDkpRefreshService()
         self._clm_dkp_by_member_id = {}
+        if hasattr(self, "_attendance_stats_column_widths"):
+            self._attendance_stats_column_widths.clear()
+        if hasattr(self, "_attendance_matrix_column_widths"):
+            self._attendance_matrix_column_widths.clear()
         try:
             self._raid_point_projection = (
                 build_point_history(
@@ -7836,7 +9844,11 @@ class GuildGearCheckerQt(QMainWindow):
         ])
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        assignment_header = table.horizontalHeader()
+        assignment_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        assignment_header.setMinimumSectionSize(60)
+        for column, width in enumerate((145, 220, 130, 175, 360)):
+            table.setColumnWidth(column, width)
         layout.addWidget(table, 1)
 
         def populate() -> None:
@@ -8388,13 +10400,24 @@ class GuildGearCheckerQt(QMainWindow):
         self.status_label.setText(str(text))
 
     def closeEvent(self, event) -> None:  # noqa: N802
-        self.autosave()
+        self._graveyard_zoom_timer.stop()
+        self._apply_graveyard_zoom()
+        self._graveyard_zoom_save_timer.stop()
+        detail_flushed = self._flush_detail_autosave(refresh=False)
+        if not detail_flushed:
+            self.autosave()
         geometry = self.geometry()
+        management_widths = (
+            self.member_table.column_widths()
+            if hasattr(self, "member_table") else list(MemberTable.DEFAULT_COLUMN_WIDTHS)
+        )
         update_suite_settings(
             self._suite_settings_path,
             checker_qt_geometry=f"{geometry.width()}x{geometry.height()}{geometry.x():+d}{geometry.y():+d}",
             graveyard_zoom_percent=self._graveyard_zoom_percent,
             roster_zoom_percent=self._roster_zoom_percent,
+            **{MANAGEMENT_COLUMN_WIDTHS_SETTING: management_widths,
+               MANAGEMENT_COLUMN_ORDER_SETTING: self.member_table.column_order()},
         )
         event.accept()
 
@@ -8413,7 +10436,7 @@ def _write_startup_error(trace_text: str) -> Path | None:
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
-    app.setApplicationVersion(QT_PREVIEW_VERSION)
+    app.setApplicationVersion(APP_VERSION)
     app.setStyle("Fusion")
     try:
         window = GuildGearCheckerQt()

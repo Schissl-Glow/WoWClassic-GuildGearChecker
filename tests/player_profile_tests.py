@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ["GGC_DISABLE_ICON_DOWNLOAD"] = "1"
 
 from app.GuildGearChecker import (
     GuildModel, POINT_MODE_ETERNAL, POINT_MODE_RAID, RaidAttendance,
@@ -232,9 +233,112 @@ class PlayerProfileQtTests(unittest.TestCase):
             def autosave(inner_self):
                 return
 
+        settings_write = patch("app.GuildGearCheckerQt.update_suite_settings")
+        settings_write.start()
+        self.addCleanup(settings_write.stop)
         with patch("app.GuildGearCheckerQt.read_suite_settings", return_value={}):
             self.window = Window()
         self.addCleanup(self.window.close)
+
+    def test_parallel_views_share_projection_selection_and_raid_rows(self):
+        from PySide6.QtCore import Qt
+        main_raid = self.window.model.create_raid("2026-09-01", "Mainraid")
+        self.window.model.import_raid_attendance(main_raid.id, [self.window.main.name])
+        twink_raid = self.window.model.create_raid("2026-09-08", "Twinkraid")
+        self.window.model.import_raid_attendance(twink_raid.id, [self.window.twink.name])
+        self.window.open_player_profile(self.window.player.playerId)
+        classic = self.window.player_profile_page
+        draft = classic.draft_page
+        self.assertEqual(classic.variant_stack.currentIndex(), 1)
+        self.assertTrue(classic.variant_buttons.button(1).isChecked())
+        self.window._build_player_profile = Mock(side_effect=AssertionError("No reload on view/character switch"))
+        self.window._clm_refresh_service.refresh = Mock(side_effect=AssertionError("No CLM refresh"))
+        snapshot = self.window._player_profile
+        for page in (classic, draft):
+            header = page.character_raid_table.horizontalHeader()
+            self.assertTrue(all(
+                header.sectionResizeMode(column).name == "Interactive"
+                for column in range(page.character_raid_table.columnCount())
+            ))
+        classic.character_raid_table.setColumnWidth(1, 333)
+        draft.character_raid_table.setColumnWidth(1, 444)
+        draft.character_raid_table.setCurrentCell(0, 0)
+        classic.variant_buttons.button(0).click()
+        self.assertEqual(classic.variant_stack.currentIndex(), 0)
+        self.assertEqual(
+            classic.character_raid_table.currentItem().data(Qt.ItemDataRole.UserRole),
+            main_raid.id,
+        )
+        classic.character_raid_table.setCurrentCell(0, 0)
+        classic.variant_buttons.button(1).click()
+        self.assertEqual(classic.variant_stack.currentIndex(), 1)
+        self.assertIs(self.window._player_profile, snapshot)
+        self.assertEqual(draft.character_raid_table.currentItem().data(Qt.ItemDataRole.UserRole), main_raid.id)
+        self.assertEqual(classic.character_raid_table.columnWidth(1), 333)
+        self.assertEqual(draft.character_raid_table.columnWidth(1), 444)
+        self.assertEqual(
+            {key: label.text() for key, label in classic.player_metric_labels.items()},
+            {key: label.text() for key, label in draft.player_metric_labels.items()},
+        )
+        draft.family_buttons[self.window.twink.id].click()
+        self.assertEqual(self.window._player_profile.player_id, self.window.player.playerId)
+        self.assertEqual(self.window._player_profile.selected_member_id, self.window.twink.id)
+        for page in (classic, draft):
+            self.assertEqual(page.character_combo.currentData(), self.window.twink.id)
+            self.assertEqual(page.character_raid_table.item(0, 1).text(), "Twinkraid")
+        classic.variant_buttons.button(0).click()
+        self.assertEqual(self.window._player_profile.selected_member_id, self.window.twink.id)
+        self.assertEqual(classic.variant_stack.currentIndex(), 0)
+        self.window._build_player_profile.assert_not_called()
+        self.window._clm_refresh_service.refresh.assert_not_called()
+
+    def test_draft_raids_are_beside_details_and_portrait_fits_all_frames(self):
+        from PySide6.QtCore import QPoint, QSize
+        from PySide6.QtGui import QPixmap
+        from app.rewards import FRAME_OPENING_RECTS
+        self.window.open_player_profile(self.window.player.playerId)
+        page = self.window.player_profile_page
+        page.variant_buttons.button(1).click()
+        draft = page.draft_page
+        self.window.resize(1040, 1050)
+        self.window.show()
+        self.app.processEvents()
+        table_pos = draft.character_raid_table.mapTo(draft, QPoint(0, 0))
+        info_pos = draft.character_name.mapTo(draft, QPoint(0, 0))
+        self.assertGreater(table_pos.x(), info_pos.x() + draft.character_name.width())
+        self.assertLess(abs(table_pos.y() - info_pos.y()), 60)
+        portrait = draft.player_portrait
+        for asset_id, opening in FRAME_OPENING_RECTS.items():
+            path = ROOT / "assets/rewards/portrait_frames" / f"{asset_id}.png"
+            self.assertTrue(path.is_file())
+            draft.player_reward_portrait.set_reward_frame(path, opening)
+            frame, outer, inner = portrait.frame_geometry()
+            self.assertFalse(frame.isNull())
+            self.assertTrue(outer.contains(inner))
+            for width, height in ((400, 800), (800, 400), (500, 500), (60, 1000)):
+                portrait.set_pixmap_source(QPixmap(width, height))
+                target = portrait.portrait_target_rect(inner)
+                self.assertTrue(inner.contains(target))
+                self.assertLessEqual(abs(target.width() * height - target.height() * width), max(width, height))
+                self.assertEqual(draft.player_reward_portrait.size(), QSize(180, 260))
+        draft.player_reward_portrait.clear_reward_frame()
+        self.assertEqual(portrait.frame_geometry()[2], portrait.contentsRect())
+
+    def test_draft_family_includes_inactive_and_dead_without_promotion(self):
+        self.window.main.className = "Warrior"
+        self.window.twink.lifeStatus = "dead"
+        inactive = self.window.model.add_member("Inaktiv", "Test")
+        inactive.playerId = self.window.player.playerId
+        inactive.characterType = "twink"
+        inactive.lifeStatus = "inactive"
+        self.window.open_player_profile(self.window.player.playerId)
+        draft = self.window.player_profile_page.draft_page
+        self.assertEqual(set(draft.family_buttons), {self.window.main.id, self.window.twink.id, inactive.id})
+        draft.family_buttons[self.window.twink.id].click()
+        self.assertEqual(self.window._player_profile.selected_character.life_status, "dead")
+        self.assertTrue(draft.player_reward_portrait._frame_source.isNull())
+        self.assertEqual(self.window._player_profile.current_main_member_id, self.window.main.id)
+        self.assertIn(self.window.main.name, draft.main_caption.text())
 
     def test_twink_entry_opens_profile_at_current_main_without_refresh_or_rebuild(self):
         self.window._clm_refresh_service.refresh = Mock(

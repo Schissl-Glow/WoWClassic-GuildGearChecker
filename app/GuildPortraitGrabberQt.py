@@ -225,7 +225,7 @@ except ImportError:  # Direkter Start über app\GuildPortraitGrabberQt.py
 
 
 APP_NAME = "Guild Portrait Grabber"
-APP_VERSION = "0.11.3-test3"
+APP_VERSION = "0.11.3"
 GRAVESTONE_CATEGORY_FILTER_ALL = "__all__"
 GRABBER_MINIMUM_SIZE = QSize(1050, 760)
 GRABBER_INITIAL_RATIO = 0.75

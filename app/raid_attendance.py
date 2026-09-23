@@ -269,6 +269,7 @@ def player_is_relevant(
 
 def resolve_attendance(
     names: Iterable[str], members: Iterable[object], players: Iterable[object],
+    wcl_member_aliases: Mapping[str, str] | None = None,
 ) -> AttendanceResolution:
     """Resolve known characters and deduplicate them by stable player ID.
 
@@ -277,10 +278,19 @@ def resolve_attendance(
     deliberately requires an explicit decision instead of guessing.
     """
     members_by_name: dict[str, list[object]] = {}
+    members_by_id: dict[str, object] = {}
     for member in members:
         members_by_name.setdefault(
             exact_name_key(getattr(member, "name", "")), [],
         ).append(member)
+        member_id = _text(getattr(member, "id", ""))
+        if member_id:
+            members_by_id[member_id] = member
+    aliases_by_name = {
+        exact_name_key(name): _text(member_id)
+        for name, member_id in (wcl_member_aliases or {}).items()
+        if exact_name_key(name) and _text(member_id)
+    }
     players_by_id = {
         str(getattr(player, "playerId", "")): player
         for player in players if getattr(player, "playerId", None)
@@ -293,14 +303,22 @@ def resolve_attendance(
     player_order: list[str] = []
     for raw_name in names:
         name = _text(raw_name)
-        matches = members_by_name.get(exact_name_key(name), [])
-        if not matches:
-            unknown.append(name)
-            continue
-        if len(matches) != 1:
-            ambiguous.append(name)
-            continue
-        member = matches[0]
+        name_key = exact_name_key(name)
+        matches = members_by_name.get(name_key, [])
+        if len(matches) == 1:
+            member = matches[0]
+        else:
+            # Exact member names remain authoritative when uniquely matched.
+            # An explicit alias can resolve an otherwise ambiguous exact name,
+            # or a WCL name that does not exist in the member list.
+            alias_member = members_by_id.get(aliases_by_name.get(name_key, ""))
+            if alias_member is None:
+                if matches:
+                    ambiguous.append(name)
+                else:
+                    unknown.append(name)
+                continue
+            member = alias_member
         player_id = _text(getattr(member, "playerId", ""))
         attendance_type = str(getattr(member, "characterType", ""))
         player = players_by_id.get(player_id)

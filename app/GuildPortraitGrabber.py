@@ -194,7 +194,7 @@ except ImportError:
     update_manifest_gravestone_category = _grave_category_module.update_manifest_gravestone_category
 
 APP_NAME = "Guild Portrait Grabber"
-APP_VERSION = "0.11.3-test3"
+APP_VERSION = "0.11.3"
 DEFAULT_REGION = "EU"
 DEFAULT_REALM = "stitches"
 DEFAULT_GAME_VERSION = "classic1x"
@@ -5606,7 +5606,7 @@ def run_self_test() -> int:
             failures.append((name, exc))
             print(f"[FEHLER] {name}: {exc}")
 
-    check("Version", lambda: (_ for _ in ()).throw(AssertionError(APP_VERSION)) if APP_VERSION != "0.11.3-test3" else None)
+    check("Version", lambda: (_ for _ in ()).throw(AssertionError(APP_VERSION)) if APP_VERSION != "0.11.3" else None)
     check("Armory-Gildenabruf deaktiviert", lambda: (_ for _ in ()).throw(AssertionError()) if LEGACY_GUILD_ROSTER_FETCH_ENABLED else None)
     check("URL + Unicode", lambda: (_ for _ in ()).throw(AssertionError("URL falsch")) if "%C3%81nn%C3%ADe" not in build_armory_url("Ánníe") else None)
     check("Dateiname Sonderzeichen", lambda: (_ for _ in ()).throw(AssertionError("Dateiname falsch")) if safe_filename('A:b?c*') != "A_b_c_" else None)

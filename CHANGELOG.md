@@ -2,13 +2,17 @@
 
 Dieses Changelog hält den aktuellen Entwicklungsstand kompakt. Ältere Einzel-Release-Notes wurden aus dem Repository-Root entfernt; ihre Inhalte bleiben weiterhin vollständig über die Git-Historie nachvollziehbar.
 
-## 0.11.3-test3 – aktueller Entwicklungsstand
+## 0.11.3 – stabile Version
 
 - Raidpunkte können über alle Raids oder ab einem festgelegten Datum gewertet werden, inklusive Migration älterer Projektstände.
 - Raidpunkte und Raidstatistik verwenden einen einheitlichen Rebuild.
 - Der WarcraftLogs-Bulk-Import erlaubt die manuelle Korrektur des erkannten Raidtyps.
 - Manuelle Raidpunkte bleiben bei Attendance-Statuswechseln, Speichern/Laden und Rebuild erhalten.
 - Dialoge wurden für kleinere Bildschirme besser nutzbar gemacht.
+- Neuer Checker-Look mit Anthrazit, Bronze und Gold; Roster-Galerie und Spielerprofil sind Standard, die Legacy-Ansichten bleiben erreichbar.
+- Raid, Teilnahme und Einstellungen wurden überarbeitet; Tabellenbreiten sind in den relevanten Checker-Bereichen anpassbar.
+- WarcraftLogs-Bulk-Import bietet stabile Alias-Zuordnung auf memberId sowie eine sortierte, durchsuchbare Charakterauswahl.
+- Friedhof-Zoom bis 40 %, verbesserter Banner-Ausschnitt und eine DKP-Historie für Spieler und Charaktere.
 
 ## 0.11.2 – letzte stabile Release-Basis
 

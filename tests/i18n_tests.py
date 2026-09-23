@@ -45,13 +45,16 @@ class I18nTests(unittest.TestCase):
         used = set()
         for filename in ("GuildGearChecker.py", "GuildGearCheckerQt.py", "GuildPortraitGrabber.py"):
             source = (repo_root / "app" / filename).read_text(encoding="utf-8")
-            used.update(re.findall(r"\btr\([\"']([^\"']+)[\"']", source))
+            literal_keys = re.findall(r"\btr\([\"']([^\"']+)[\"']", source)
+            # A key ending in a dot is a dynamic prefix, e.g. tr("life." + status).
+            used.update(key for key in literal_keys if not key.endswith("."))
         for relative in (
             "tools/gravestone_review/gravestone_review_tool.py",
             "tools/gravestone_review/gravestone_alpha_editor.py",
         ):
             source = (repo_root / relative).read_text(encoding="utf-8")
-            used.update(re.findall(r"\btr\([\"']([^\"']+)[\"']", source))
+            literal_keys = re.findall(r"\btr\([\"']([^\"']+)[\"']", source)
+            used.update(key for key in literal_keys if not key.endswith("."))
         de_missing = used - service.keys("de")
         en_missing = used - service.keys("en")
         self.assertFalse(de_missing, f"Fehlende DE-Schlüssel: {sorted(de_missing)}")

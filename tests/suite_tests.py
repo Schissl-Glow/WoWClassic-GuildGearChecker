@@ -174,11 +174,9 @@ def core_tests() -> None:
     assert "app\\GuildPortraitGrabber.py" not in starter_p
     assert "--output-dir" not in starter_p
     assert "tools\\_FIND_QT_PYTHON.cmd" in starter_p
-    starter_p_legacy = (ROOT / "STARTEN_PortraitGrabber_LEGACY.bat").read_text(
-        encoding="utf-8"
-    )
-    assert "app\\GuildPortraitGrabber.py" in starter_p_legacy
-    assert "tools\\_FIND_MINIFORGE.cmd" in starter_p_legacy
+    # The current repository keeps user-facing starters in the root and the
+    # legacy grabber is no longer shipped as a separate root launcher.
+    assert not (ROOT / "STARTEN_PortraitGrabber_LEGACY.bat").exists()
 
     print("CORE/INTEGRATION TESTS OK")
 

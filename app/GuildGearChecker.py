@@ -83,7 +83,7 @@ try:
         ATTENDANCE_STATUSES, RAID_CATEGORIES, RAID_TYPES,
         AttendanceResolution, Raid, RaidAttendance, RaidValidationError, attendance_index,
         attendance_records, calculate_statistics, new_attendance_id, new_raid_id, normalize_iso_date,
-        normalize_optional_date,
+        exact_name_key, normalize_optional_date,
         player_is_relevant, raid_category, resolve_attendance, validate_logs_url,
         validate_membership_dates,
     )
@@ -135,6 +135,7 @@ except ImportError:
     new_attendance_id = _raid_module.new_attendance_id
     new_raid_id = _raid_module.new_raid_id
     normalize_iso_date = _raid_module.normalize_iso_date
+    exact_name_key = _raid_module.exact_name_key
     normalize_optional_date = _raid_module.normalize_optional_date
     player_is_relevant = _raid_module.player_is_relevant
     raid_category = _raid_module.raid_category
@@ -265,7 +266,7 @@ except ImportError:
     load_character_cache = _character_cache_module.load_character_cache
 
 APP_NAME = "Guild Gear Checker"
-APP_VERSION = "0.11.3-test3"
+APP_VERSION = "0.11.3"
 PROJECT_FORMAT = "GuildGearCheckerProject"
 PROJECT_FORMAT_VERSION = 4
 PROJECT_PACKAGE_FORMAT_VERSION = 1
@@ -1272,6 +1273,7 @@ class _GuildModelState:
         self.game_version = GAME_VERSION
         self.project_path: Path | None = None
         self.dirty = False
+        self.wcl_member_aliases: dict[str, str] = {}
         self._gravestone_inventory_cache: GravestoneInventory | None = None
 
 
@@ -1736,6 +1738,7 @@ class GuildModel(_GuildModelState):
     def new_empty(self) -> None:
         self.members = []
         self.players = []
+        self.wcl_member_aliases = {}
         self.raids = []
         self.raid_attendance = []
         self.raid_points = RaidPointState()
@@ -1773,6 +1776,7 @@ class GuildModel(_GuildModelState):
         """Clear characters while preserving historical raid records and files."""
         self.members = []
         self.players = []
+        self.wcl_member_aliases = {}
         self.next_id = 1000
         self.next_player_id = 1
         self.dirty = True
@@ -2233,7 +2237,27 @@ class GuildModel(_GuildModelState):
         return previous_count
 
     def resolve_raid_attendance(self, names: Iterable[str]) -> AttendanceResolution:
-        return resolve_attendance(names, self.members, self.players)
+        return resolve_attendance(
+            names, self.members, self.players, self.wcl_member_aliases,
+        )
+
+    def set_wcl_member_alias(self, wcl_name: object, member_id: object) -> str:
+        """Persist one exact normalized WarcraftLogs name to an existing member ID."""
+        name_key = exact_name_key(wcl_name)
+        member_key = str(member_id or "").strip()
+        if not name_key:
+            raise ValueError(tr("model.enter_character"))
+        if self.find_by_id(member_key) is None:
+            raise ValueError(tr("model.character_not_found"))
+        exact_matches = [
+            member for member in self.members
+            if exact_name_key(member.name) == name_key
+        ]
+        if len(exact_matches) == 1 and exact_matches[0].id != member_key:
+            raise ValueError(tr("raids.wcl_alias_exact_conflict", name=exact_matches[0].name))
+        self.wcl_member_aliases[name_key] = member_key
+        self.dirty = True
+        return member_key
 
     def import_raid_attendance(self, raid_id: str, names: Iterable[str],
                                add_unknown_names: Iterable[str] = (),
@@ -2478,18 +2502,9 @@ class GuildModel(_GuildModelState):
                     ))
                     continue
                 resolution = self.resolve_raid_attendance(names)
-                if resolution.ambiguous_names:
-                    plans.append(BulkRaidCsvPlan(
-                        source_path=source_path, raid_date=raid_date,
-                        raid_type=raid_type, report_url=report_url,
-                        names=names, duplicates=tuple(parsed.duplicates),
-                        status="invalid",
-                        detail=tr(
-                            "raids.bulk_unresolved",
-                            names=", ".join(resolution.ambiguous_names),
-                        ),
-                    ))
-                    continue
+                unresolved_names = tuple(dict.fromkeys((
+                    *resolution.unknown_names, *resolution.ambiguous_names,
+                )))
 
                 identity = (raid_date, raid_type)
                 existing_raid = self._matching_raid(raid_date, raid_type)
@@ -2500,7 +2515,7 @@ class GuildModel(_GuildModelState):
                     )
                 else:
                     status = "existing" if identity in seen_identities else "new"
-                unknown_names = tuple(resolution.unknown_names)
+                unknown_names = unresolved_names
                 if status == "new" and unknown_names:
                     status = "needs_assignment"
                 plans.append(BulkRaidCsvPlan(
@@ -3150,7 +3165,7 @@ class GuildModel(_GuildModelState):
         return member
 
     def to_payload(self) -> dict:
-        return {
+        payload = {
             "format": PROJECT_FORMAT,
             "formatVersion": PROJECT_FORMAT_VERSION,
             "appVersion": f"Python {APP_VERSION}",
@@ -3172,6 +3187,9 @@ class GuildModel(_GuildModelState):
             "raidPoints": self.raid_points.to_dict(),
             "eternalDkp": self.eternal_dkp.to_dict(),
         }
+        if self.wcl_member_aliases:
+            payload["wclMemberAliases"] = dict(sorted(self.wcl_member_aliases.items()))
+        return payload
 
     def load_payload(self, payload: dict, path: Path | None = None) -> None:
         raw_version = payload.get("formatVersion")
@@ -3288,6 +3306,26 @@ class GuildModel(_GuildModelState):
                     raise ValueError(tr("model.multiple_active_mains", id=member.playerId))
                 active_main_players.add(member.playerId)
 
+        raw_wcl_aliases = payload.get("wclMemberAliases", {})
+        loaded_wcl_aliases: dict[str, str] = {}
+        conflicting_aliases: set[str] = set()
+        if isinstance(raw_wcl_aliases, dict):
+            loaded_member_ids = {member.id for member in loaded}
+            for raw_name, raw_member_id in raw_wcl_aliases.items():
+                if not isinstance(raw_name, str) or not isinstance(raw_member_id, str):
+                    continue
+                name_key = exact_name_key(raw_name)
+                member_id = raw_member_id.strip()
+                if not name_key or member_id not in loaded_member_ids:
+                    continue
+                previous = loaded_wcl_aliases.get(name_key)
+                if previous is not None and previous != member_id:
+                    conflicting_aliases.add(name_key)
+                else:
+                    loaded_wcl_aliases[name_key] = member_id
+        for name_key in conflicting_aliases:
+            loaded_wcl_aliases.pop(name_key, None)
+
         raw_raids = payload.get("raids", [])
         raw_attendance = payload.get("raidAttendance", [])
         if not isinstance(raw_raids, list):
@@ -3356,6 +3394,7 @@ class GuildModel(_GuildModelState):
 
         self.members = loaded
         self.players = loaded_players
+        self.wcl_member_aliases = loaded_wcl_aliases
         self.raids = loaded_raids
         self.raid_attendance = loaded_attendance
         self.raid_points = loaded_raid_points
@@ -7261,7 +7300,7 @@ class GuildGearCheckerApp(tk.Tk):
 
 
 def run_self_tests() -> None:
-    assert APP_VERSION == "0.11.3-test3"
+    assert APP_VERSION == "0.11.3"
     assert build_armory_url("Ánníe").endswith("/%C3%81nn%C3%ADe?game_version=classic1x")
     assert build_armory_url("Schlübbeer").endswith("/Schl%C3%BCbbeer?game_version=classic1x")
     assert norm_name(" Bífi ") == norm_name("bífi")

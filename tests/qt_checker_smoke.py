@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QFrame, QHeade
 from app.GuildGearCheckerQt import (
     CHECKER_BANNER_HEIGHT, GuildGearCheckerQt, GuildModel, HeaderWidget, MemberEditDelegate,
     RAID_ATTENDANCE_FIXED_COLUMNS, RAID_MATRIX_BACKGROUND_ROLE,
-    RAID_MATRIX_HEADER_HEIGHT, RAID_MATRIX_ROW_HEIGHT, RaidPointAdjustmentDialog,
+    RAID_MATRIX_HEADER_HEIGHT, RAID_MATRIX_ROW_HEIGHT, MemberTable, RaidPointAdjustmentDialog,
     RaidEditorDialog, UnknownRaidMemberDialog,
 )
 from app import i18n as suite_i18n
@@ -117,7 +117,7 @@ app.processEvents()
 assert window.stack.currentWidget() is window._pages["management"]
 assert window.member_tab == "Gildenliste"
 assert window.member_table.rowCount() == 1
-assert window.member_table.columnCount() == 9
+assert window.member_table.columnCount() == 11
 window.set_member_tab("Alle Charaktere")
 app.processEvents()
 assert window.member_table.rowCount() == 2
@@ -132,13 +132,15 @@ assert window.member_table.rowCount() == 1
 window._select_member_in_table("m1000")
 window.show_member("m1000")
 assert window.detail_name.text() == "QtSmoke"
-assert window.detail_portrait.width() == 124 and window.detail_portrait.height() == 124
+assert window.detail_portrait.width() == 220 and window.detail_portrait.height() == 220
 assert hasattr(window, "detail_sections")
 assert not hasattr(window, "detail_tabs")
 assert window.member_wipe_button.text() == "Wipe"
 header = window.findChild(HeaderWidget)
 assert header is not None and header.height() == CHECKER_BANNER_HEIGHT == 200 and not header._source.isNull()
-assert window.member_table.columnWidth(3) >= 185
+assert window.member_table.columnWidth(3) == MemberTable.DEFAULT_COLUMN_WIDTHS[3]
+window.member_table.setColumnWidth(3, 210)
+assert window.member_table.columnWidth(3) == 210
 assert MemberEditDelegate.EDITOR_MIN_WIDTHS[3] >= 200
 # The compact detail panel keeps actions below the tab content rather than overlapping it.
 app.processEvents()
@@ -199,11 +201,11 @@ window.switch_page("rooster")
 app.processEvents()
 assert len(window._roster_cards) == 1  # Roster intentionally contains active members only
 rank_card = window._roster_cards[0]
-assert rank_card.rank_icon.width() == 41
-assert rank_card.rank_icon.height() == 41
+assert 28 <= rank_card.rank_icon.width() <= 58
+assert 28 <= rank_card.rank_icon.height() <= 58
 assert rank_card.rank_icon.x() <= rank_card.portrait.width() - 48
-assert rank_card.rank_icon.y() >= 7
-sections = window.roster_content.findChildren(QFrame, "rosterSection")
+assert rank_card.rank_icon.y() >= 0
+sections = window.roster_content.findChildren(QFrame, "rosterDraftSection")
 assert len(sections) == 4  # Tank, Heiler, DPS und Nicht zugeordnet bleiben getrennt sichtbar.
 assert window._roster_zoom_percent == 100
 window.roster_zoom_slider.setValue(70)
@@ -512,10 +514,16 @@ bench_participant_row = next(
 )
 bench_character = window.raid_participants_table.item(bench_participant_row, 1)
 assert not bench_character.icon().isNull()
-assert bench_character.foreground().color().name() != "#3fc7eb"
-assert window.raid_participants_table.item(bench_participant_row, 3).background().color().name() == "#6d5418"
-assert window.raid_table.horizontalHeader().sectionResizeMode(2) == QHeaderView.ResizeMode.Stretch
-assert window.raid_participants_table.horizontalHeader().sectionResizeMode(1) == QHeaderView.ResizeMode.Stretch
+assert bench_character.foreground().color().name() == "#3fc7eb"
+assert window.raid_participants_table.item(bench_participant_row, 3).foreground().color().name() == "#e1c183"
+assert all(
+    window.raid_table.horizontalHeader().sectionResizeMode(column) == QHeaderView.ResizeMode.Interactive
+    for column in range(window.raid_table.columnCount())
+)
+assert all(
+    window.raid_participants_table.horizontalHeader().sectionResizeMode(column) == QHeaderView.ResizeMode.Interactive
+    for column in range(window.raid_participants_table.columnCount())
+)
 window.raid_subtabs.setCurrentIndex(1)
 window.refresh_raid_matrix()
 assert window.raid_stats_table.rowCount() == 2

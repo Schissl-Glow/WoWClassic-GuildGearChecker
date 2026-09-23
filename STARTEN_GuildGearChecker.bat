@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title Guild Gear Checker v0.11.3-test3 Tester - Qt
+title Guild Gear Checker v0.11.3 - Qt
 
 call "%~dp0tools\_FIND_QT_PYTHON.cmd"
 if not defined GGC_QT_PYTHON goto :NO_QT_PYTHON
@@ -12,7 +12,7 @@ set "PYTHONPATH="
 set "QT_PLUGIN_PATH="
 
 echo ============================================================
-echo   Guild Gear Checker v0.11.3-test3 Tester - Qt
+echo   Guild Gear Checker v0.11.3 - Qt
 echo ============================================================
 echo.
 echo Verwendetes Python:

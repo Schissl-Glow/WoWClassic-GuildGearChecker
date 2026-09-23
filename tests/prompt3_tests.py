@@ -35,7 +35,7 @@ class Prompt3Tests(unittest.TestCase):
         self.assertEqual(self.checker.checker_banner_path().name, "checker_banner.png")
         self.assertTrue((REPO_ROOT / "tools" / "gravestone_review" / "gravestone_review_core.py").is_file())
         self.assertTrue((REPO_ROOT / "tools" / "gravestone_review" / "gravestone_review_tool.py").is_file())
-        self.assertTrue((REPO_ROOT / "START_GRAVESTONE_REVIEW.bat").is_file())
+        self.assertTrue((REPO_ROOT / "tools" / "bat" / "START_GRAVESTONE_REVIEW.bat").is_file())
 
     def test_standalone_review_uses_shared_core(self):
         from tools.gravestone_review import gravestone_review_core, gravestone_review_tool
