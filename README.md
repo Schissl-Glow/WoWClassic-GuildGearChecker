@@ -109,7 +109,7 @@ Der Installer richtet Python 3.12, PySide6, Pillow und die benötigten Browser-K
 
 ## Downloads
 
-Fertige Versionen sollen künftig über **GitHub Releases** bereitgestellt werden. Dabei werden nur die aktuelle stabile Version, die vorherige stabile Version und bei Bedarf ein aktueller Teststand gepflegt.
+Freigegebene Versionen werden über **[GitHub Releases](https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker/releases)** bereitgestellt. Gepflegt werden die aktuelle stabile Version, die vorherige stabile Version und bei Bedarf ein aktueller Teststand.
 
 ## Projektstruktur
 
