@@ -1,4 +1,4 @@
-# Bierstuben Rang-Assets
+# [**WoWClassic-GuildGearChecker**](https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker) – Rang-Assets
 
 ## Struktur
 
