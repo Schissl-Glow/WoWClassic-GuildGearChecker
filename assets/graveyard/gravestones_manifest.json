@@ -1,0 +1,355 @@
+{
+  "format": "GuildGearCheckerGravestoneManifest",
+  "formatVersion": 1,
+  "generatedAt": "2026-09-15T08:33:34+02:00",
+  "templates": [
+    {
+      "graveTemplateId": "grave-template-0001",
+      "filename": "gravestone_001.png",
+      "sha256": "fdde962b4eb7877c5023e7c659b281c1915fd2454a054a37f68b371d1132d988",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0002",
+      "filename": "gravestone_002.png",
+      "sha256": "015b36194380653c5a204a6907c4a8946e1f332356a7bb6362a50d939c6f68a8",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0003",
+      "filename": "gravestone_003.png",
+      "sha256": "f2fc5bed9a64948be7ef2c9c0010461e4f5fdb90f3bf8c98eda62dabe3e6dcd2",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0004",
+      "filename": "gravestone_004.png",
+      "sha256": "7402e73a549a7559628381783e6bd09a00fc330b6b0f6b78090b0d1a80f642ce",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0005",
+      "filename": "gravestone_005.png",
+      "sha256": "54da3acce6501452e4bcddff8097ef0ac40865dceb276bed360dd37113861360",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0006",
+      "filename": "gravestone_006.png",
+      "sha256": "34c7d0dc1348e5dcf9d7e4e9a98d7d368d925f80560f981fc3dd6a6b5b555fe9",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0007",
+      "filename": "gravestone_007.png",
+      "sha256": "e028ac5ee2fd1bde4388d6a6efec5c0fa1c680396a3f53078a6a4548a05affdb",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0008",
+      "filename": "gravestone_008.png",
+      "sha256": "9901b40a4b05b9b3229433ba58910827919a6871531755a9dcb875e59c46e35e",
+      "category": "Menschen",
+      "defaultTextSafeArea": [
+        303,
+        830,
+        754,
+        1084
+      ]
+    },
+    {
+      "graveTemplateId": "grave-template-0009",
+      "filename": "gravestone_009.png",
+      "sha256": "32feec3d34167f9f37d3c4ae9bb06b061cd173c209a0378be7dede5663579cd9",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0010",
+      "filename": "gravestone_010.png",
+      "sha256": "1366c0f821cc4cb7d73e98d66586df3c75e7d9273fbf8e4c18997deb04a34b8b",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0011",
+      "filename": "gravestone_011.png",
+      "sha256": "9f415f71a0525021a309ec20d055a9b34317a20f663a15fdbf6f437d54af63b1",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0012",
+      "filename": "gravestone_012.png",
+      "sha256": "0dfa357247630128b1d5afd07c7331b13c8b270d524a12466188675062d2feff",
+      "category": "Zwerge"
+    },
+    {
+      "graveTemplateId": "grave-template-0013",
+      "filename": "gravestone_013.png",
+      "sha256": "0ac8ef08ec8fb29857b60c2f0d329ca11bc598a420eded71bd39df996155998d",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0014",
+      "filename": "gravestone_014.png",
+      "sha256": "0b691d7dcc4d95d937746515c7bf2ee7b199fff8b12e29aa065b2e48556b3951",
+      "category": "Menschen",
+      "defaultTextSafeArea": [
+        274,
+        819,
+        775,
+        1088
+      ]
+    },
+    {
+      "graveTemplateId": "grave-template-0015",
+      "filename": "gravestone_015.png",
+      "sha256": "4f45f2373e33ea2ca31f5cb5ac96eca97ceca911d3252c36bad9974479684068",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0016",
+      "filename": "gravestone_016.png",
+      "sha256": "55ed1931d95342ed05ae72790b646a335cd1376f62bbc694c3f8136a9c12788a",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0017",
+      "filename": "gravestone_017.png",
+      "sha256": "a0080f755998b4c1d1232bc16730a9c77c191b695ccfa39fcfd60221daac4caf",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0018",
+      "filename": "gravestone_018.png",
+      "sha256": "10a4088d9a6eada2c02ca84d55e1fa4fb18ae9f100e49b5434b2fba38a73c763",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0019",
+      "filename": "gravestone_019.png",
+      "sha256": "081ca4e166a3f4cac1b859dff5369e38c27711cb57ce75f2910e3946dcc0d0d1",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0020",
+      "filename": "gravestone_020.png",
+      "sha256": "d6bf269363281ae9d0a0e61a225adf70cc6cbf75e162d607a9555810f1562b9d",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0021",
+      "filename": "gravestone_021.png",
+      "sha256": "9e79868cd7f4f24f2079230191ab9fd1a0672a1e7b9cba905eab3de912eca9ce",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0022",
+      "filename": "gravestone_022.png",
+      "sha256": "48405625db6a8657def2a7d893513d894e6485b921e812769799c74eaf2a86cb",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0023",
+      "filename": "gravestone_023.png",
+      "sha256": "df2f0eb6fc3c7cc3745f9ab88509cb187db3e5889081a2cba0666b45c2323d4d",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0024",
+      "filename": "gravestone_024.png",
+      "sha256": "0683a8ac3178306492f09a65b5f6d9eb00cdeac64d2cefeb1a14311687956833",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0025",
+      "filename": "gravestone_025.png",
+      "sha256": "4a4454007b02968dc58bc1e467a8e8f58ae3758e90247a0fcf292a39cf00b96e",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0026",
+      "filename": "gravestone_026.png",
+      "sha256": "30b876a0bd8019d8ab4e606af4d11edc96220a0606992a688ba67f984c477386",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0027",
+      "filename": "gravestone_027.png",
+      "sha256": "1c3ccb5b064b829a37ad65984736c5b23fbed15b68832db70e5d344086518423",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0028",
+      "filename": "gravestone_028.png",
+      "sha256": "728f9c0b6f469923146e40b51d84d95ecbb8e2e47caac73a8f05352beffbf4f3",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0029",
+      "filename": "gravestone_029.png",
+      "sha256": "1f4d93e9ca3081643a1980364ab49196f508a3668a0d4d979c94213050f03a2a",
+      "category": "Menschen",
+      "defaultTextSafeArea": [
+        289,
+        872,
+        779,
+        1139
+      ]
+    },
+    {
+      "graveTemplateId": "grave-template-0030",
+      "filename": "gravestone_030.png",
+      "sha256": "5ea1ebb0fd600cb7176216c95bdbde04e340058df926d5d79860b22f4315bfdd",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0031",
+      "filename": "gravestone_031.png",
+      "sha256": "dc49e4433e085ea9e05e3700b29eb89080b4518a882f7e0c5ba4be37a686e2e5",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0032",
+      "filename": "gravestone_032.png",
+      "sha256": "c148fa1b56063182509bf3bf4d054ece27bbaaa88fd76f0395dbc9b08eb4c441",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0033",
+      "filename": "gravestone_033.png",
+      "sha256": "b60eb71f5766c93d76fdb040d556da5195128192e6316fb5a31d3bcc4ad1ed9f",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0034",
+      "filename": "gravestone_034.png",
+      "sha256": "6f9876d4e877687c823c9cfb1c694fc1237c53d13d44e1a7cae57491d0db721a",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0035",
+      "filename": "gravestone_035.png",
+      "sha256": "4734183c789b692130b88b6ca8d10ddf7d874d65d26f609e68efb733c02bd218",
+      "category": "Elfen",
+      "defaultTextSafeArea": [
+        346,
+        815,
+        708,
+        1027
+      ]
+    },
+    {
+      "graveTemplateId": "grave-template-0036",
+      "filename": "gravestone_036.png",
+      "sha256": "b9dc14853eb24448578301085a32ddec706aa86cbba8f6ca48fd0c613358a79d",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0037",
+      "filename": "gravestone_037.png",
+      "sha256": "45265ed298603146f65a4435a4877a2cf1f41ca21787acf01d0ebad7df5f8bef",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0038",
+      "filename": "gravestone_038.png",
+      "sha256": "96b55c8679e7486b234f78f7f1ee23a3d4a293f624005324401197a649bd43d0",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0039",
+      "filename": "gravestone_039.png",
+      "sha256": "89f5282255c53bf8f94933f1ff7f647f67e17638cec84e79555c4ec3e7bd631f",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0040",
+      "filename": "gravestone_040.png",
+      "sha256": "3ac08b2d5f85271f92f917eee28fee460dad88e177cdb93dcaed9f51b00c3543",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0041",
+      "filename": "gravestone_041.png",
+      "sha256": "dff19a244c1c7f8d41a7393dc69a42b94f091aa39604b9999c95d319a1c15afd",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0042",
+      "filename": "gravestone_042.png",
+      "sha256": "84a18000733687157c2f0028a655953cf8f62dc221a2b8cbe427d966c7c5f51b",
+      "category": "Elfen"
+    },
+    {
+      "graveTemplateId": "grave-template-0043",
+      "filename": "gravestone_043.png",
+      "sha256": "695c2c2f46adcdbf478e52eaa25f61ea6550cf27591ad2b225313f021cc0c025",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0044",
+      "filename": "gravestone_044.png",
+      "sha256": "f4f3d07a76923fb75cd7b60bdbbb6278851b747581296ed7f76195be8d2b7b3f",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0045",
+      "filename": "gravestone_045.png",
+      "sha256": "794dd737e5be8d9c2deed7f6c3aaa5b06c7a05d63d3fd25db680a3531e372218",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0046",
+      "filename": "gravestone_046.png",
+      "sha256": "e53cbf14e1c3812416695d4af32ddfead702cf97f1130e66b0b29a06aee3c4a1",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0047",
+      "filename": "gravestone_047.png",
+      "sha256": "76a988d046518df8f174e612a60f391ad8a4e5608d6379911a8e802304518dbf",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0048",
+      "filename": "gravestone_048.png",
+      "sha256": "a3d4b3ea2c074ad67d45d6807c839ae395fb73c264f44232084c3f036341527a",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0049",
+      "filename": "gravestone_049.png",
+      "sha256": "df55520d97db32d92e470915ba0ad38d08f5c081ac33d29ebee7aaf8509854ed",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0050",
+      "filename": "gravestone_050.png",
+      "sha256": "5d0cc265093f1b2cdd11dc36742ae27cbbcb66282b2123fb40376fe244949e26",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0051",
+      "filename": "gravestone_051.png",
+      "sha256": "36bc673e52ee3ffa7888baa042a8257c82f07d08218cc0e293b597a8b49199f8",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0052",
+      "filename": "gravestone_052.png",
+      "sha256": "1515e93e2fde55faf26b21795edfca20025ce831d0232bff392912c31b5b7a15",
+      "category": "Zauberer"
+    },
+    {
+      "graveTemplateId": "grave-template-0053",
+      "filename": "gravestone_053.png",
+      "sha256": "32b126e7c31b527c04cbc3cd69fa2c722c79b30b457e6ebbd0c3cfca86638e2f",
+      "category": "Menschen"
+    },
+    {
+      "graveTemplateId": "grave-template-0054",
+      "filename": "gravestone_054.png",
+      "sha256": "9571dc90ae65eeaaa579dc519233de8dc785728f3ffa6af3c6871825fe6ca5ab",
+      "category": "Menschen"
+    }
+  ]
+}

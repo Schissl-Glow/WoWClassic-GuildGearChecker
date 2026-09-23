@@ -1,0 +1,1 @@
+Standardordner fuer Gildenprojekte. Projekte koennen auch an anderen Orten gespeichert werden.

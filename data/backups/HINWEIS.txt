@@ -1,0 +1,1 @@
+Reserviert fuer zusaetzliche Sicherungen. Projektbezogene Backups bleiben neben der jeweiligen .ggc-Datei.

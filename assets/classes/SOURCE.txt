@@ -1,0 +1,20 @@
+CLASS ICON CACHE
+================
+
+Quelle: Wowhead / Zamimg
+Schema:
+https://wow.zamimg.com/images/wow/icons/large/classicon_<class>.jpg
+
+Verifizierte Classic-Classicon-Zuordnung:
+Druid    -> classicon_druid.jpg    -> Wowhead Icon-ID 625999
+Hunter   -> classicon_hunter.jpg   -> Wowhead Icon-ID 626000
+Mage     -> classicon_mage.jpg     -> Wowhead Icon-ID 626001
+Paladin  -> classicon_paladin.jpg  -> Wowhead Icon-ID 626003
+Priest   -> classicon_priest.jpg   -> Wowhead Icon-ID 626004
+Rogue    -> classicon_rogue.jpg    -> Wowhead Icon-ID 626005
+Shaman   -> classicon_shaman.jpg   -> Wowhead Icon-ID 626006
+Warlock  -> classicon_warlock.jpg  -> Wowhead Icon-ID 626007
+Warrior  -> classicon_warrior.jpg  -> Wowhead Icon-ID 626008
+
+INSTALLIEREN.bat laedt in v0.5.0 alle neun Originalbilder bewusst neu.
+Der Unterordner fallback\ enthaelt nur Ersatzbilder fuer Offline-/Downloadfehler.

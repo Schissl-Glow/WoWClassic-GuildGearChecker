@@ -1,0 +1,357 @@
+{
+  "package": "Bierstuben Character Ranks",
+  "version": 1,
+  "count": 35,
+  "ranks": [
+    {
+      "id": "Holz_1",
+      "material": "Holz",
+      "stage": 1,
+      "raid_points_threshold": 80,
+      "eternal_dkp_threshold": 100,
+      "master": "assets/ranks/master/Holz_1.png",
+      "size_96": "assets/ranks/96/Holz_1.png",
+      "size_48": "assets/ranks/48/Holz_1.png"
+    },
+    {
+      "id": "Holz_2",
+      "material": "Holz",
+      "stage": 2,
+      "raid_points_threshold": 160,
+      "eternal_dkp_threshold": 200,
+      "master": "assets/ranks/master/Holz_2.png",
+      "size_96": "assets/ranks/96/Holz_2.png",
+      "size_48": "assets/ranks/48/Holz_2.png"
+    },
+    {
+      "id": "Holz_3",
+      "material": "Holz",
+      "stage": 3,
+      "raid_points_threshold": 240,
+      "eternal_dkp_threshold": 300,
+      "master": "assets/ranks/master/Holz_3.png",
+      "size_96": "assets/ranks/96/Holz_3.png",
+      "size_48": "assets/ranks/48/Holz_3.png"
+    },
+    {
+      "id": "Holz_4",
+      "material": "Holz",
+      "stage": 4,
+      "raid_points_threshold": 320,
+      "eternal_dkp_threshold": 400,
+      "master": "assets/ranks/master/Holz_4.png",
+      "size_96": "assets/ranks/96/Holz_4.png",
+      "size_48": "assets/ranks/48/Holz_4.png"
+    },
+    {
+      "id": "Holz_5",
+      "material": "Holz",
+      "stage": 5,
+      "raid_points_threshold": 400,
+      "eternal_dkp_threshold": 500,
+      "master": "assets/ranks/master/Holz_5.png",
+      "size_96": "assets/ranks/96/Holz_5.png",
+      "size_48": "assets/ranks/48/Holz_5.png"
+    },
+    {
+      "id": "Eisen_1",
+      "material": "Eisen",
+      "stage": 1,
+      "raid_points_threshold": 480,
+      "eternal_dkp_threshold": 600,
+      "master": "assets/ranks/master/Eisen_1.png",
+      "size_96": "assets/ranks/96/Eisen_1.png",
+      "size_48": "assets/ranks/48/Eisen_1.png"
+    },
+    {
+      "id": "Eisen_2",
+      "material": "Eisen",
+      "stage": 2,
+      "raid_points_threshold": 560,
+      "eternal_dkp_threshold": 700,
+      "master": "assets/ranks/master/Eisen_2.png",
+      "size_96": "assets/ranks/96/Eisen_2.png",
+      "size_48": "assets/ranks/48/Eisen_2.png"
+    },
+    {
+      "id": "Eisen_3",
+      "material": "Eisen",
+      "stage": 3,
+      "raid_points_threshold": 640,
+      "eternal_dkp_threshold": 800,
+      "master": "assets/ranks/master/Eisen_3.png",
+      "size_96": "assets/ranks/96/Eisen_3.png",
+      "size_48": "assets/ranks/48/Eisen_3.png"
+    },
+    {
+      "id": "Eisen_4",
+      "material": "Eisen",
+      "stage": 4,
+      "raid_points_threshold": 720,
+      "eternal_dkp_threshold": 900,
+      "master": "assets/ranks/master/Eisen_4.png",
+      "size_96": "assets/ranks/96/Eisen_4.png",
+      "size_48": "assets/ranks/48/Eisen_4.png"
+    },
+    {
+      "id": "Eisen_5",
+      "material": "Eisen",
+      "stage": 5,
+      "raid_points_threshold": 800,
+      "eternal_dkp_threshold": 1000,
+      "master": "assets/ranks/master/Eisen_5.png",
+      "size_96": "assets/ranks/96/Eisen_5.png",
+      "size_48": "assets/ranks/48/Eisen_5.png"
+    },
+    {
+      "id": "Bronze_1",
+      "material": "Bronze",
+      "stage": 1,
+      "raid_points_threshold": 880,
+      "eternal_dkp_threshold": 1100,
+      "master": "assets/ranks/master/Bronze_1.png",
+      "size_96": "assets/ranks/96/Bronze_1.png",
+      "size_48": "assets/ranks/48/Bronze_1.png"
+    },
+    {
+      "id": "Bronze_2",
+      "material": "Bronze",
+      "stage": 2,
+      "raid_points_threshold": 960,
+      "eternal_dkp_threshold": 1200,
+      "master": "assets/ranks/master/Bronze_2.png",
+      "size_96": "assets/ranks/96/Bronze_2.png",
+      "size_48": "assets/ranks/48/Bronze_2.png"
+    },
+    {
+      "id": "Bronze_3",
+      "material": "Bronze",
+      "stage": 3,
+      "raid_points_threshold": 1040,
+      "eternal_dkp_threshold": 1300,
+      "master": "assets/ranks/master/Bronze_3.png",
+      "size_96": "assets/ranks/96/Bronze_3.png",
+      "size_48": "assets/ranks/48/Bronze_3.png"
+    },
+    {
+      "id": "Bronze_4",
+      "material": "Bronze",
+      "stage": 4,
+      "raid_points_threshold": 1120,
+      "eternal_dkp_threshold": 1400,
+      "master": "assets/ranks/master/Bronze_4.png",
+      "size_96": "assets/ranks/96/Bronze_4.png",
+      "size_48": "assets/ranks/48/Bronze_4.png"
+    },
+    {
+      "id": "Bronze_5",
+      "material": "Bronze",
+      "stage": 5,
+      "raid_points_threshold": 1200,
+      "eternal_dkp_threshold": 1500,
+      "master": "assets/ranks/master/Bronze_5.png",
+      "size_96": "assets/ranks/96/Bronze_5.png",
+      "size_48": "assets/ranks/48/Bronze_5.png"
+    },
+    {
+      "id": "Silber_1",
+      "material": "Silber",
+      "stage": 1,
+      "raid_points_threshold": 1280,
+      "eternal_dkp_threshold": 1600,
+      "master": "assets/ranks/master/Silber_1.png",
+      "size_96": "assets/ranks/96/Silber_1.png",
+      "size_48": "assets/ranks/48/Silber_1.png"
+    },
+    {
+      "id": "Silber_2",
+      "material": "Silber",
+      "stage": 2,
+      "raid_points_threshold": 1360,
+      "eternal_dkp_threshold": 1700,
+      "master": "assets/ranks/master/Silber_2.png",
+      "size_96": "assets/ranks/96/Silber_2.png",
+      "size_48": "assets/ranks/48/Silber_2.png"
+    },
+    {
+      "id": "Silber_3",
+      "material": "Silber",
+      "stage": 3,
+      "raid_points_threshold": 1440,
+      "eternal_dkp_threshold": 1800,
+      "master": "assets/ranks/master/Silber_3.png",
+      "size_96": "assets/ranks/96/Silber_3.png",
+      "size_48": "assets/ranks/48/Silber_3.png"
+    },
+    {
+      "id": "Silber_4",
+      "material": "Silber",
+      "stage": 4,
+      "raid_points_threshold": 1520,
+      "eternal_dkp_threshold": 1900,
+      "master": "assets/ranks/master/Silber_4.png",
+      "size_96": "assets/ranks/96/Silber_4.png",
+      "size_48": "assets/ranks/48/Silber_4.png"
+    },
+    {
+      "id": "Silber_5",
+      "material": "Silber",
+      "stage": 5,
+      "raid_points_threshold": 1600,
+      "eternal_dkp_threshold": 2000,
+      "master": "assets/ranks/master/Silber_5.png",
+      "size_96": "assets/ranks/96/Silber_5.png",
+      "size_48": "assets/ranks/48/Silber_5.png"
+    },
+    {
+      "id": "Gold_1",
+      "material": "Gold",
+      "stage": 1,
+      "raid_points_threshold": 1680,
+      "eternal_dkp_threshold": 2100,
+      "master": "assets/ranks/master/Gold_1.png",
+      "size_96": "assets/ranks/96/Gold_1.png",
+      "size_48": "assets/ranks/48/Gold_1.png"
+    },
+    {
+      "id": "Gold_2",
+      "material": "Gold",
+      "stage": 2,
+      "raid_points_threshold": 1760,
+      "eternal_dkp_threshold": 2200,
+      "master": "assets/ranks/master/Gold_2.png",
+      "size_96": "assets/ranks/96/Gold_2.png",
+      "size_48": "assets/ranks/48/Gold_2.png"
+    },
+    {
+      "id": "Gold_3",
+      "material": "Gold",
+      "stage": 3,
+      "raid_points_threshold": 1840,
+      "eternal_dkp_threshold": 2300,
+      "master": "assets/ranks/master/Gold_3.png",
+      "size_96": "assets/ranks/96/Gold_3.png",
+      "size_48": "assets/ranks/48/Gold_3.png"
+    },
+    {
+      "id": "Gold_4",
+      "material": "Gold",
+      "stage": 4,
+      "raid_points_threshold": 1920,
+      "eternal_dkp_threshold": 2400,
+      "master": "assets/ranks/master/Gold_4.png",
+      "size_96": "assets/ranks/96/Gold_4.png",
+      "size_48": "assets/ranks/48/Gold_4.png"
+    },
+    {
+      "id": "Gold_5",
+      "material": "Gold",
+      "stage": 5,
+      "raid_points_threshold": 2000,
+      "eternal_dkp_threshold": 2500,
+      "master": "assets/ranks/master/Gold_5.png",
+      "size_96": "assets/ranks/96/Gold_5.png",
+      "size_48": "assets/ranks/48/Gold_5.png"
+    },
+    {
+      "id": "Platin_1",
+      "material": "Platin",
+      "stage": 1,
+      "raid_points_threshold": 2080,
+      "eternal_dkp_threshold": 2600,
+      "master": "assets/ranks/master/Platin_1.png",
+      "size_96": "assets/ranks/96/Platin_1.png",
+      "size_48": "assets/ranks/48/Platin_1.png"
+    },
+    {
+      "id": "Platin_2",
+      "material": "Platin",
+      "stage": 2,
+      "raid_points_threshold": 2160,
+      "eternal_dkp_threshold": 2700,
+      "master": "assets/ranks/master/Platin_2.png",
+      "size_96": "assets/ranks/96/Platin_2.png",
+      "size_48": "assets/ranks/48/Platin_2.png"
+    },
+    {
+      "id": "Platin_3",
+      "material": "Platin",
+      "stage": 3,
+      "raid_points_threshold": 2240,
+      "eternal_dkp_threshold": 2800,
+      "master": "assets/ranks/master/Platin_3.png",
+      "size_96": "assets/ranks/96/Platin_3.png",
+      "size_48": "assets/ranks/48/Platin_3.png"
+    },
+    {
+      "id": "Platin_4",
+      "material": "Platin",
+      "stage": 4,
+      "raid_points_threshold": 2320,
+      "eternal_dkp_threshold": 2900,
+      "master": "assets/ranks/master/Platin_4.png",
+      "size_96": "assets/ranks/96/Platin_4.png",
+      "size_48": "assets/ranks/48/Platin_4.png"
+    },
+    {
+      "id": "Platin_5",
+      "material": "Platin",
+      "stage": 5,
+      "raid_points_threshold": 2400,
+      "eternal_dkp_threshold": 3000,
+      "master": "assets/ranks/master/Platin_5.png",
+      "size_96": "assets/ranks/96/Platin_5.png",
+      "size_48": "assets/ranks/48/Platin_5.png"
+    },
+    {
+      "id": "Diamant_1",
+      "material": "Diamant",
+      "stage": 1,
+      "raid_points_threshold": 2480,
+      "eternal_dkp_threshold": 3100,
+      "master": "assets/ranks/master/Diamant_1.png",
+      "size_96": "assets/ranks/96/Diamant_1.png",
+      "size_48": "assets/ranks/48/Diamant_1.png"
+    },
+    {
+      "id": "Diamant_2",
+      "material": "Diamant",
+      "stage": 2,
+      "raid_points_threshold": 2560,
+      "eternal_dkp_threshold": 3200,
+      "master": "assets/ranks/master/Diamant_2.png",
+      "size_96": "assets/ranks/96/Diamant_2.png",
+      "size_48": "assets/ranks/48/Diamant_2.png"
+    },
+    {
+      "id": "Diamant_3",
+      "material": "Diamant",
+      "stage": 3,
+      "raid_points_threshold": 2640,
+      "eternal_dkp_threshold": 3300,
+      "master": "assets/ranks/master/Diamant_3.png",
+      "size_96": "assets/ranks/96/Diamant_3.png",
+      "size_48": "assets/ranks/48/Diamant_3.png"
+    },
+    {
+      "id": "Diamant_4",
+      "material": "Diamant",
+      "stage": 4,
+      "raid_points_threshold": 2720,
+      "eternal_dkp_threshold": 3400,
+      "master": "assets/ranks/master/Diamant_4.png",
+      "size_96": "assets/ranks/96/Diamant_4.png",
+      "size_48": "assets/ranks/48/Diamant_4.png"
+    },
+    {
+      "id": "Diamant_5",
+      "material": "Diamant",
+      "stage": 5,
+      "raid_points_threshold": 2800,
+      "eternal_dkp_threshold": 3500,
+      "master": "assets/ranks/master/Diamant_5.png",
+      "size_96": "assets/ranks/96/Diamant_5.png",
+      "size_48": "assets/ranks/48/Diamant_5.png"
+    }
+  ]
+}

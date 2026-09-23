@@ -1,0 +1,26 @@
+{
+  "canvas_size": [
+    1074,
+    1464
+  ],
+  "portrait_bbox": [
+    315,
+    297,
+    758,
+    739
+  ],
+  "text_safe_area": [
+    260,
+    760,
+    814,
+    1110
+  ],
+  "border_safety_px": 12,
+  "portrait_annulus_opaque_min": 0.5,
+  "notes": "v0.7: adaptive portrait opening retained; review workspace moved to assets/graveyard; core logic extracted for standalone + future Grabber reuse; staging-only approved_new workflow.",
+  "edge_clear_px": 8,
+  "portrait_core_inset_px": 50,
+  "portrait_core_transparency_min": 0.98,
+  "portrait_geometry_outer_opaque_min": 0.2,
+  "portrait_core_block_min": 0.95
+}

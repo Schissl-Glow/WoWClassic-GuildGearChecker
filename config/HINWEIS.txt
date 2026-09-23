@@ -1,0 +1,1 @@
+Konfigurationsdateien werden beim ersten Start automatisch angelegt.

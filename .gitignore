@@ -1,0 +1,62 @@
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+test_results/
+
+# Local Python environments
+.venv/
+venv/
+env/
+
+# Build and packaging output
+build/
+dist/
+*.egg-info/
+release/
+releases/
+GuildGearChecker_Suite_v*/
+GuildGearChecker_Suite_v*.zip
+*_Regressionstests.zip
+
+# Local application state and user data; keep directory guidance files
+config/portrait_grabber.json
+config/suite_settings.json
+data/autosave/*
+!data/autosave/HINWEIS.txt
+data/backups/*
+!data/backups/HINWEIS.txt
+data/logs/*
+!data/logs/HINWEIS.txt
+data/portraits/*
+!data/portraits/HINWEIS.txt
+data/projects/*
+!data/projects/HINWEIS.txt
+data/runtime/
+data/temp/*
+!data/temp/HINWEIS.txt
+data/browser_profiles/
+
+# Temporary exports, logs and editor/OS artifacts
+exports/
+screenshots/
+*_Export_*.ggc
+*_mit_Portraits_*.zip
+*.log
+*.tmp
+*.temp
+*.bak
+*.old
+~$*
+Thumbs.db
+.DS_Store
+
+# Local PySide6 runtime created by INSTALLIEREN.bat
+_qt_env/

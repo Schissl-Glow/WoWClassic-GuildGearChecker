@@ -1,0 +1,103 @@
+{
+  "package": "Bierstuben Reward Assets",
+  "version": 3,
+  "notes": {
+    "badges": "Legacy honor_* badges retired from productive character progression. Productive 35-stage character ranks live under assets/ranks/.",
+    "portrait_frames": "7 final portrait frames: Holz, Eisen, Bronze, Silber, Gold, Platin, Diamant. Source PNGs are used unchanged; opening_rect is derived from the central fully transparent alpha component.",
+    "behavior": "Character rewards use the highest applicable 35-stage rank. Player rewards use the highest applicable portrait frame on the current Main. Rewards are hidden when the points/reward system is disabled."
+  },
+  "badges": [],
+  "portrait_frames": [
+    {
+      "id": "frame_01",
+      "file": "assets/rewards/portrait_frames/frame_01.png",
+      "opening_rect": [
+        138,
+        192,
+        667,
+        1297
+      ],
+      "threshold": 250,
+      "status": "final_asset",
+      "rank": "Holz"
+    },
+    {
+      "id": "frame_02",
+      "file": "assets/rewards/portrait_frames/frame_02.png",
+      "opening_rect": [
+        172,
+        228,
+        598,
+        1174
+      ],
+      "threshold": 500,
+      "status": "final_asset",
+      "rank": "Eisen"
+    },
+    {
+      "id": "frame_03",
+      "file": "assets/rewards/portrait_frames/frame_03.png",
+      "opening_rect": [
+        158,
+        199,
+        624,
+        1237
+      ],
+      "threshold": 750,
+      "status": "final_asset",
+      "rank": "Bronze"
+    },
+    {
+      "id": "frame_04",
+      "file": "assets/rewards/portrait_frames/frame_04.png",
+      "opening_rect": [
+        149,
+        177,
+        650,
+        1286
+      ],
+      "threshold": 1500,
+      "status": "final_asset",
+      "rank": "Silber"
+    },
+    {
+      "id": "frame_05",
+      "file": "assets/rewards/portrait_frames/frame_05.png",
+      "opening_rect": [
+        143,
+        175,
+        662,
+        1281
+      ],
+      "threshold": 2000,
+      "status": "final_asset",
+      "rank": "Gold"
+    },
+    {
+      "id": "frame_06",
+      "file": "assets/rewards/portrait_frames/frame_06.png",
+      "opening_rect": [
+        142,
+        195,
+        655,
+        1256
+      ],
+      "threshold": 3000,
+      "status": "final_asset",
+      "rank": "Platin"
+    },
+    {
+      "id": "frame_07",
+      "file": "assets/rewards/portrait_frames/frame_07.png",
+      "opening_rect": [
+        160,
+        239,
+        621,
+        1162
+      ],
+      "threshold": 5000,
+      "status": "final_asset",
+      "rank": "Diamant"
+    }
+  ]
+}
