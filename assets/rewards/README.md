@@ -1,4 +1,4 @@
-# Bierstuben Reward Assets
+# [**WoWClassic-GuildGearChecker**](https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker) – Reward Assets
 
 ## Inhalt
 
