@@ -93,7 +93,7 @@ Das Add-on wird nicht im Repository von [**WoWClassic-GuildGearChecker**](https:
 ### Voraussetzungen
 
 - Windows
-- Miniforge / Conda
+- **Miniforge ist erforderlich:** [Miniforge über conda-forge herunterladen](https://conda-forge.org/download/)
 - Internetzugang für die erstmalige Einrichtung der Abhängigkeiten
 
 Aktuell wird keine eigenständige EXE ausgeliefert. Die mitgelieferte Installation richtet eine lokale Python-/Qt-Umgebung unter dem Benutzerprofil ein.
