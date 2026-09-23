@@ -1,4 +1,4 @@
-# Changelog – Bierstuben / GuildGearChecker
+# Changelog – [**WoWClassic-GuildGearChecker**](https://github.com/Schissl-Glow/WoWClassic-GuildGearChecker)
 
 Dieses Changelog hält den aktuellen Entwicklungsstand kompakt. Ältere Einzel-Release-Notes wurden aus dem Repository-Root entfernt; ihre Inhalte bleiben weiterhin vollständig über die Git-Historie nachvollziehbar.
 
