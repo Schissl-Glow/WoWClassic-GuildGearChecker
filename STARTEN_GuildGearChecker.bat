@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title Guild Gear Checker v0.11.3 - Qt
+title Guild Gear Checker v0.12.1 - Qt
 
 call "%~dp0tools\_FIND_QT_PYTHON.cmd"
 if not defined GGC_QT_PYTHON goto :NO_QT_PYTHON
@@ -12,7 +12,7 @@ set "PYTHONPATH="
 set "QT_PLUGIN_PATH="
 
 echo ============================================================
-echo   Guild Gear Checker v0.11.3 - Qt
+echo   Guild Gear Checker v0.12.1 - Qt
 echo ============================================================
 echo.
 echo Verwendetes Python:
@@ -21,9 +21,9 @@ echo Qt-Umgebung:
 echo   %GGC_QT_ENV%
 echo.
 
-echo Starte PySide6-Checker ...
+echo Starte PySide6-Startmenue ...
 echo.
-"%GGC_QT_PYTHON%" "%~dp0app\GuildGearCheckerQt.py"
+"%GGC_QT_PYTHON%" "%~dp0app\launcher_qt.py"
 set "RC=%ERRORLEVEL%"
 
 if "%RC%"=="0" exit /b 0

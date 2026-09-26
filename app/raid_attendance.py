@@ -9,6 +9,11 @@ from datetime import date
 from typing import Callable, Iterable, Mapping
 from urllib.parse import urlparse
 
+try:
+    from .raid_type_detection import detect_raid_type
+except ImportError:
+    from raid_type_detection import detect_raid_type  # type: ignore
+
 
 RAID_STATUSES = ("draft", "recorded")
 ATTENDANCE_TYPES = ("main", "twink")
@@ -18,7 +23,7 @@ RAID_CATEGORIES = ("20er", "40er", "Onyxia", "World Boss")
 
 
 def raid_category(raid_type: object) -> str:
-    value = _text(raid_type)
+    value = detect_raid_type(raid_type)
     if value in {"ZG", "AQ20"}:
         return "20er"
     if value in {"MC", "BWL", "AQ40", "Naxx"}:
@@ -232,6 +237,9 @@ class AttendanceStatistics:
     last_attendance: str | None
     current_streak: int
     longest_streak: int
+    relevant_days: int = 0
+    attended_days: int = 0
+    day_percent: int = 0
 
 
 def attendance_index(
@@ -242,6 +250,14 @@ def attendance_index(
     for entry in attendance:
         result.setdefault(entry.raidId, {})[entry.playerId] = entry
     return result
+
+
+def preferred_attendance(current: object | None, candidate: object) -> object:
+    """Keep one raid credit per subject; present outranks bench, ties stay stable."""
+    if current is None or (getattr(current, "status", None) != "present"
+                           and getattr(candidate, "status", None) == "present"):
+        return candidate
+    return current
 
 
 def player_is_relevant(
@@ -391,12 +407,17 @@ def calculate_statistics(
     category: str = "", raid_type: str = "",
     member_assignments: Mapping[str, tuple[str, str]] | None = None,
     member_id: str | None = None,
+    member_ids: Iterable[str] | None = None,
     eligible_raid_ids: Iterable[str] | None = None,
+    streak_by_day: bool = False,
 ) -> AttendanceStatistics:
-    # Kept for call-site compatibility only. Historical statistics are always
-    # attributed through the playerId/memberId/attendanceType stored on each
-    # attendance record, never through today's character assignment.
+    # ``member_assignments`` remains for call-site compatibility only. A family
+    # query may explicitly select current member IDs while each record retains
+    # its historical attendanceType.
     del member_assignments
+    family_member_ids = {str(value) for value in member_ids} if member_ids is not None else None
+    if member_id is not None and family_member_ids is not None:
+        raise ValueError("member_id und member_ids sind alternative Attendance-Filter.")
     normalized_start = normalize_optional_date(start_date)
     normalized_end = normalize_optional_date(end_date)
     if normalized_start and normalized_end and normalized_end < normalized_start:
@@ -421,11 +442,14 @@ def calculate_statistics(
     by_raid: dict[str, tuple[RaidAttendance, str]] = {}
     for entry in attendance:
         matches_subject = (
-            entry.memberId == member_id if member_id is not None
-            else entry.playerId == player_id
+            entry.memberId == member_id if member_id is not None else
+            entry.memberId in family_member_ids if family_member_ids is not None else
+            entry.playerId == player_id
         )
         if matches_subject and entry.raidId in eligible_ids:
-            by_raid[entry.raidId] = (entry, entry.attendanceType)
+            previous = by_raid.get(entry.raidId)
+            if preferred_attendance(previous[0] if previous else None, entry) is entry:
+                by_raid[entry.raidId] = (entry, entry.attendanceType)
     attended_entries = [
         entry for entry, _type in by_raid.values()
         if entry.status in {"present", "bench"}
@@ -450,17 +474,21 @@ def calculate_statistics(
         (raid_dates[entry.raidId] for entry in attended_entries if entry.raidId in raid_dates),
         default=None,
     )
-    current_streak = 0
-    longest_streak = 0
-    for raid in sorted(
-            (raid for raid in scoped_raids if raid.id in eligible_ids),
-            key=lambda item: (item.date, item.id)):
+    ordered_relevant = sorted(
+        (raid for raid in scoped_raids if raid.id in eligible_ids),
+        key=lambda item: (item.date, item.id))
+    day_visits: dict[str, bool] = {}
+    for raid in ordered_relevant:
         entry = by_raid.get(raid.id, (None, ""))[0]
-        if entry is not None and entry.status in {"present", "bench"}:
-            current_streak += 1
-            longest_streak = max(longest_streak, current_streak)
-        else:
-            current_streak = 0
+        day_visits[raid.date] = day_visits.get(raid.date, False) or (
+            entry is not None and entry.status in {"present", "bench"})
+    current_streak = longest_streak = 0
+    visits = (day_visits.values() if streak_by_day else (
+        raid.id in by_raid and by_raid[raid.id][0].status in {"present", "bench"}
+        for raid in ordered_relevant))
+    for visited in visits:
+        current_streak = current_streak + 1 if visited else 0
+        longest_streak = max(longest_streak, current_streak)
     return AttendanceStatistics(
         player_id=member_id if member_id is not None else player_id,
         eligible_raids=eligible_count,
@@ -474,4 +502,7 @@ def calculate_statistics(
         last_attendance=last_attendance,
         current_streak=current_streak,
         longest_streak=longest_streak,
+        relevant_days=len(day_visits),
+        attended_days=sum(day_visits.values()),
+        day_percent=round(100 * sum(day_visits.values()) / len(day_visits)) if day_visits else 0,
     )

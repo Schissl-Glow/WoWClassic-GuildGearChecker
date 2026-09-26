@@ -34,6 +34,13 @@ class CharacterProfile:
     eternal_dkp: int | float
     current_dkp: int | float | None
     rank_asset_id: str | None
+    raid_role: str = "not_set"
+    gear_status: str = ""
+    raid_status: str = ""
+    raid_days: int = 0
+    rank_path: Path | None = None
+    raid_rows: tuple[tuple[str, str, str, int | float | None, str], ...] = ()
+    main_periods: tuple[tuple[str | None, str | None], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -54,6 +61,8 @@ class PlayerProfileViewModel:
     longest_streak: int
     frame_asset_id: str | None
     characters: tuple[CharacterProfile, ...]
+    raid_days: int = 0
+    player_rank_asset_id: str | None = None
 
     @property
     def selected_character(self) -> CharacterProfile | None:
@@ -130,17 +139,20 @@ def _recorded_raids(model: object) -> dict[str, object]:
 
 def _attended_raid_ids(
     model: object, *, member_id: str | None = None, player_id: str | None = None,
+    member_ids: Iterable[str] | None = None,
 ) -> tuple[str, ...]:
     """Return unique recorded Present/Bench raids by stable identity."""
     raids = _recorded_raids(model)
+    family_member_ids = {str(value) for value in member_ids} if member_ids is not None else None
     ids = {
         str(getattr(entry, "raidId", ""))
         for entry in getattr(model, "raid_attendance", ())
         if getattr(entry, "status", "") in {"present", "bench"}
         and str(getattr(entry, "raidId", "")) in raids
         and (
-            getattr(entry, "memberId", "") == member_id if member_id is not None
-            else getattr(entry, "playerId", "") == player_id
+            getattr(entry, "memberId", "") == member_id if member_id is not None else
+            getattr(entry, "memberId", "") in family_member_ids if family_member_ids is not None else
+            getattr(entry, "playerId", "") == player_id
         )
     }
     return tuple(sorted(
@@ -193,6 +205,23 @@ def _member_profile_attendance(
 def _player_profile_attendance(
     model: object, player: object, members: Iterable[object],
 ) -> object:
+    members = tuple(members)
+    player_id = str(getattr(player, "playerId", ""))
+    eligible_ids = player_eligible_raid_ids(model, player, members)
+    return calculate_statistics(
+        player_id, model.raids, model.raid_attendance,
+        model.attendance_tracking_start_date,
+        getattr(player, "membershipStartDate", None),
+        getattr(player, "membershipEndDate", None),
+        member_ids={str(getattr(member, "id", "")) for member in members},
+        eligible_raid_ids=eligible_ids,
+    )
+
+
+def player_eligible_raid_ids(
+    model: object, player: object, members: Iterable[object],
+) -> set[str]:
+    """Return a player's membership window plus the history of every family member."""
     player_id = str(getattr(player, "playerId", ""))
     eligible_ids = {
         str(getattr(raid, "id", ""))
@@ -204,21 +233,13 @@ def _player_profile_attendance(
         )
     }
     for member in members:
-        if getattr(member, "lifeStatus", "") == "active":
-            continue
         attended_ids = _attended_raid_ids(
             model, member_id=str(getattr(member, "id", "")),
         )
         eligible_ids.update(
             _historical_member_eligible_ids(model, member, attended_ids)
         )
-    return calculate_statistics(
-        player_id, model.raids, model.raid_attendance,
-        model.attendance_tracking_start_date,
-        getattr(player, "membershipStartDate", None),
-        getattr(player, "membershipEndDate", None),
-        eligible_raid_ids=eligible_ids,
-    )
+    return eligible_ids
 
 
 def build_player_profile(
@@ -249,9 +270,10 @@ def build_player_profile(
     selected_id = str(getattr(selected, "id", "")) or None
 
     entries = tuple(raid_point_entries) if raid_point_entries is not None else None
+    family_member_ids = {str(getattr(member, "id", "")) for member in members}
     player_raid_points = (
         sum(int(getattr(entry, "total_points", 0)) for entry in entries
-            if getattr(entry, "player_id", "") == player_id)
+            if getattr(entry, "member_id", "") in family_member_ids)
         if entries is not None else None
     )
     eternal_character_totals = model.eternal_character_totals()
@@ -263,7 +285,9 @@ def build_player_profile(
     ]
     player_dkp = sum(available_player_dkp) if available_player_dkp else None
 
-    player_attended_raid_ids = _attended_raid_ids(model, player_id=player_id)
+    player_attended_raid_ids = _attended_raid_ids(
+        model, member_ids=family_member_ids,
+    )
     player_attendance = _player_profile_attendance(model, player, members)
     characters: list[CharacterProfile] = []
     for member in sorted(members, key=lambda value: _member_order(value, current_main_id)):

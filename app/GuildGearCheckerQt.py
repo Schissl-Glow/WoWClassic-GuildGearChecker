@@ -6,7 +6,7 @@ This module deliberately reuses the established domain/data logic from
 Tkinter checker remains included as a fallback while the Qt migration is
 validated locally.
 
-Version: 0.11.3
+Version: 0.12.1
 """
 from __future__ import annotations
 
@@ -23,16 +23,16 @@ from dataclasses import replace
 from datetime import datetime
 from math import sqrt
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Iterable
 
 from PySide6.QtCore import (
-    QEvent, QPoint, QRect, QSize, Qt, QTimer, QSortFilterProxyModel, Signal,
+    QEvent, QPoint, QRect, QSize, Qt, QTimer, QSortFilterProxyModel, QUrl, Signal,
 )
 from PySide6.QtGui import (
     QAction,
     QColor,
     QFont,
-    QFontDatabase,
     QIcon,
     QImage,
     QKeySequence,
@@ -54,6 +54,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QGridLayout,
+    QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QInputDialog,
@@ -303,6 +304,7 @@ try:
     )
     from app.player_profile import (
         PlayerProfileViewModel, active_player_options, build_player_profile,
+        player_eligible_raid_ids,
     )
 except ImportError:
     from clm_models import ClmRosterSelectionRequired  # type: ignore
@@ -321,6 +323,7 @@ except ImportError:
     )
     from player_profile import (  # type: ignore
         PlayerProfileViewModel, active_player_options, build_player_profile,
+        player_eligible_raid_ids,
     )
 
 CHECKER_BANNER_HEIGHT = 200
@@ -333,27 +336,29 @@ MEMBER_DETAIL_SCROLL_HEIGHT_TOLERANCE = 64
 RAID_MATRIX_HEADER_HEIGHT = 48
 RAID_MATRIX_ROW_HEIGHT = 32
 RAID_MATRIX_BACKGROUND_ROLE = int(Qt.ItemDataRole.UserRole) + 101
+RAID_MATRIX_STATUS_COLORS = {
+    "present": "#248447", "bench": "#b18420",
+    "absent": "#11161d", "irrelevant": "#59616a",
+}
 RAID_ATTENDANCE_FIXED_COLUMNS = 10
 RAID_MATRIX_STAT_COLUMN_WIDTHS = (100, 100, 72, 110, 78, 78, 100, 116, 110)
 MANAGEMENT_COLUMN_WIDTHS_SETTING = "management_member_table_column_widths"
 MANAGEMENT_COLUMN_ORDER_SETTING = "management_member_table_column_order"
-ROSTER_CLASSIC_ZOOM_MIN = 60
 ROSTER_DRAFT_ZOOM_MIN = 40
 ROSTER_ZOOM_MAX = 140
 
-BG = "#0c1015"
-PANEL = "#141a21"
-PANEL_ALT = "#1a222c"
-PANEL_RAISED = "#202a35"
-BORDER = "#303b48"
-BORDER_SOFT = "#252f3a"
-TEXT = "#eef2f5"
-MUTED = "#9aa7b4"
-GOLD = "#c8a35a"
-GOLD_BRIGHT = "#e0bd73"
-GREEN = "#477a61"
-RED = "#7a4347"
-BLUE = "#3d5f7a"
+try:
+    from app.qt_theme import (
+        BG, PANEL, PANEL_ALT, PANEL_RAISED, BORDER, BORDER_SOFT, TEXT,
+        MUTED, GOLD, GOLD_BRIGHT, GREEN, RED, BLUE,
+        decorative_font_family,
+    )
+except ImportError:
+    from qt_theme import (  # type: ignore
+        BG, PANEL, PANEL_ALT, PANEL_RAISED, BORDER, BORDER_SOFT, TEXT,
+        MUTED, GOLD, GOLD_BRIGHT, GREEN, RED, BLUE,
+        decorative_font_family,
+    )
 
 CLASS_DISPLAY_KEYS = {
     "Druid": "druid", "Hunter": "hunter", "Mage": "mage",
@@ -428,10 +433,28 @@ QPushButton {{
 QPushButton:hover {{ border-color: #6d7d8e; background: #26323e; }}
 QPushButton:pressed {{ background: #111820; }}
 QPushButton:disabled {{ color: #68727c; background: #151b22; border-color: #252d35; }}
+QPushButton:focus {{ border-color: #c7a265; }}
+QToolButton {{
+    background: {PANEL_RAISED}; color: {TEXT}; border: 1px solid #394654;
+    border-radius: 5px; padding: 4px 8px; font-weight: 600;
+}}
+QToolButton:hover {{ background: #26323e; border-color: #6d7d8e; }}
+QToolButton:pressed {{ background: #111820; }}
+QToolButton:disabled {{ color: #68727c; background: #151b22; border-color: #252d35; }}
+QToolButton:focus {{ border-color: #c7a265; }}
+QToolButton:checked {{ background: #302b22; border-color: #80643f; color: #f5dfb1; }}
 QPushButton[primary="true"] {{ background: #344e42; border-color: #547762; }}
 QPushButton[primary="true"]:hover {{ background: #3c5a4b; border-color: #6e987d; }}
+QPushButton[primary="true"]:pressed {{ background: #263b31; border-color: #6e987d; }}
+QPushButton[primary="true"]:disabled {{ color: #68727c; background: #151b22; border-color: #252d35; }}
 QPushButton[danger="true"] {{ background: #4a2b2e; border-color: #74464a; }}
 QPushButton[danger="true"]:hover {{ background: #5a3236; border-color: #9b5b60; }}
+QPushButton[danger="true"]:pressed {{ background: #3a2225; border-color: #9b5b60; }}
+QPushButton[danger="true"]:disabled {{ color: #68727c; background: #151b22; border-color: #252d35; }}
+QPushButton[multiSelected="true"] {{ background: #8a5a20; color: #fff0cc; border-color: #e2a340; }}
+QPushButton[multiSelected="true"]:hover {{ background: #a06b29; border-color: #f0bc64; }}
+QPushButton[multiSelected="true"]:pressed {{ background: #704719; border-color: #f0bc64; }}
+QPushButton[multiSelected="true"]:disabled {{ background: #30291f; color: #817a6d; border-color: #544532; }}
 QPushButton#viewSwitchButton {{
     min-height: 25px;
     padding: 3px 10px;
@@ -443,6 +466,10 @@ QPushButton#viewSwitchButton:checked {{
     color: #f5dfb1;
     font-weight: 700;
 }}
+QPushButton#viewSwitchButton:hover {{ background: #292a29; border-color: #9a7a49; }}
+QPushButton#viewSwitchButton:checked:hover {{ background: #302b22; border-color: #b9955b; }}
+QPushButton#viewSwitchButton:pressed {{ background: #1a1e23; }}
+QPushButton#viewSwitchButton:disabled {{ background: #151b22; color: #68727c; border-color: #252d35; }}
 QPushButton#navButton {{
     background: transparent;
     border: none;
@@ -452,23 +479,32 @@ QPushButton#navButton {{
     color: #aeb8c2;
     font-size: 10pt;
 }}
-QPushButton#navButton:hover {{ color: #f0e5cf; background: #151d26; }}
+QPushButton#navButton:hover {{ color: #d8e5ee; background: #1b2a39; }}
 QPushButton#navButton:checked {{
     color: #f3e3c2;
     border-bottom-color: {GOLD};
     background: #18212a;
 }}
+QPushButton#navButton:checked:hover {{ background: #18212a; color: #f3e3c2; }}
+QPushButton#navButton:focus {{ background: #1b2a39; }}
+QPushButton#navButton:disabled {{ color: #606b76; background: transparent; }}
 QPushButton#subnavButton {{
     background: #171f28;
     border: 1px solid #2d3844;
     color: #aeb8c2;
     padding: 5px 10px;
 }}
+QPushButton#subnavButton[v2ManagementTab="true"] {{ padding: 7px 18px; }}
 QPushButton#subnavButton:checked {{
     color: #f2e6cf;
     border-color: #806a3d;
     background: #25271f;
 }}
+QPushButton#subnavButton:hover {{ background: #202d3b; border-color: #536779; color: #e0e9ef; }}
+QPushButton#subnavButton:checked:hover {{ background: #25271f; border-color: #a8884f; color: #f2e6cf; }}
+QPushButton#subnavButton:pressed {{ background: #151c24; }}
+QPushButton#subnavButton:disabled {{ background: #151b22; border-color: #252d35; color: #68727c; }}
+QPushButton#subnavButton:focus {{ border-color: #c7a265; }}
 QFrame#graveZoomBar {{
     background: rgba(12, 20, 28, 220);
     border: 1px solid #475c6f;
@@ -499,6 +535,9 @@ QLineEdit, QComboBox, QSpinBox, QTextEdit {{
     selection-color: #f5dfb1;
 }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QTextEdit:focus {{ border-color: {GOLD}; }}
+QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QTextEdit:hover {{ border-color: #6b7885; }}
+QLineEdit:focus:hover, QComboBox:focus:hover, QSpinBox:focus:hover, QTextEdit:focus:hover {{ border-color: {GOLD}; }}
+QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QTextEdit:disabled {{ color: #68727c; background: #151b22; border-color: #252d35; }}
 QComboBox QAbstractItemView {{
     background: #171e26;
     color: {TEXT};
@@ -517,9 +556,12 @@ QPushButton#detailAction {{
 }}
 QCheckBox {{ spacing: 7px; }}
 QCheckBox::indicator {{ width: 16px; height: 16px; }}
+QCheckBox::indicator:hover {{ border: 1px solid #c7a265; }}
 QCheckBox::indicator:checked, QRadioButton::indicator:checked {{
     background: #80643f; border: 1px solid #c7a265;
 }}
+QTableWidget::indicator {{ width: 16px; height: 16px; border: 1px solid #59636c; background: #17212a; }}
+QTableWidget::indicator:checked {{ background: #80643f; border-color: #c7a265; }}
 QTableWidget {{
     background: #11171e;
     alternate-background-color: #141b23;
@@ -531,6 +573,7 @@ QTableWidget {{
 }}
 QTableWidget::item {{ padding: 6px; border-bottom: 1px solid #202a34; }}
 QTableWidget::item:selected {{ background:#302b22;color:#f5dfb1; }}
+QHeaderView::section:hover {{ background: #293542; color: #f1d79f; }}
 QHeaderView::section {{
     background: #202830;
     color: #e1c183;
@@ -555,6 +598,7 @@ QTabWidget::pane {{
 QTabBar::tab {{
     background: #171f28;
     border: 1px solid #303b47;
+    border-top: 2px solid transparent;
     border-bottom: none;
     padding: 8px 13px;
     color: #aeb8c2;
@@ -562,8 +606,11 @@ QTabBar::tab {{
 QTabBar::tab:selected {{
     color: #f3e6cd;
     background: #202932;
-    border-top: 2px solid {GOLD};
+    border-top-color: {GOLD};
 }}
+QTabBar::tab:hover {{ background: #202d3b; color: #e0e9ef; }}
+QTabBar::tab:selected:hover {{ background: #202932; color: #f3e6cd; }}
+QTabBar::tab:disabled {{ background: #151b22; color: #68727c; }}
 QSplitter::handle {{ background: #26313c; width: 2px; }}
 QStatusBar {{ background: #10161d; color: {MUTED}; border-top: 1px solid #29333e; }}
 QMenuBar {{ background: #10161d; color: #dce3e9; }}
@@ -772,6 +819,7 @@ class CoverImageLabel(QLabel):
         super().__init__(parent)
         self._source = QPixmap()
         self._placeholder = placeholder
+        self._contain_portrait = False
         self.setMinimumSize(120, 120)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -782,6 +830,10 @@ class CoverImageLabel(QLabel):
     def set_source(self, path: Path | None) -> None:
         pixmap = QPixmap(str(path)) if path and path.is_file() else QPixmap()
         self._source = pixmap
+        self.update()
+
+    def set_contain_portrait(self, enabled: bool) -> None:
+        self._contain_portrait = bool(enabled)
         self.update()
 
     def set_pixmap_source(self, pixmap: QPixmap) -> None:
@@ -805,13 +857,19 @@ class CoverImageLabel(QLabel):
         if not self._source.isNull() and rect.width() > 0 and rect.height() > 0:
             scaled = self._source.scaled(
                 rect.size(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.AspectRatioMode.KeepAspectRatio if self._contain_portrait
+                else Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation,
             )
-            x = max(0, (scaled.width() - rect.width()) // 2)
-            y = max(0, (scaled.height() - rect.height()) // 2)
-            source_rect = QRect(x, y, rect.width(), rect.height())
-            painter.drawPixmap(rect, scaled, source_rect)
+            if self._contain_portrait:
+                target = QRect(QPoint(0, 0), scaled.size())
+                target.moveCenter(rect.center())
+                painter.drawPixmap(target, scaled)
+            else:
+                x = max(0, (scaled.width() - rect.width()) // 2)
+                y = max(0, (scaled.height() - rect.height()) // 2)
+                source_rect = QRect(x, y, rect.width(), rect.height())
+                painter.drawPixmap(rect, scaled, source_rect)
         else:
             painter.setPen(QColor("#6f7b86"))
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self._placeholder)
@@ -941,11 +999,29 @@ class ClickableFrame(QFrame):
         super().__init__(parent)
         self.member_id = member_id
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setProperty("pressed", False)
+
+    def _set_pressed(self, pressed: bool) -> None:
+        if self.property("pressed") == pressed:
+            return
+        self.setProperty("pressed", pressed)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
+            self._set_pressed(True)
             self.clicked.emit(self.member_id)
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        self._set_pressed(False)
+        super().mouseReleaseEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self._set_pressed(False)
+        super().leaveEvent(event)
 
 
 class ResponsiveCardGrid(QWidget):
@@ -1317,6 +1393,8 @@ class GraveyardView(QWidget):
         self.scroll.setWidget(self.canvas)
         layout.addWidget(self.scroll, 1)
 
+        self.collective_count = 0
+
         self.zoom_bar = QFrame(self)
         self.zoom_bar.setObjectName("graveZoomBar")
         self.zoom_bar.setStyleSheet("""
@@ -1330,6 +1408,8 @@ class GraveyardView(QWidget):
             }
             QFrame#graveZoomBar QPushButton:hover {background:#302b22;border-color:#c7a265;}
             QFrame#graveZoomBar QPushButton:pressed {background:#584832;}
+            QFrame#graveZoomBar QPushButton:disabled {background:#151b22;color:#68727c;border-color:#252d35;}
+            QFrame#graveZoomBar QPushButton:focus {border-color:#e0bd72;}
             QFrame#graveZoomBar QSlider::groove:horizontal {
                 height:5px;background:#28323b;border:1px solid #584832;border-radius:2px;
             }
@@ -1380,6 +1460,9 @@ class GraveyardView(QWidget):
     def set_zoom_percent(self, value: int) -> None:
         self.slider.setValue(max(self.slider.minimum(), min(self.slider.maximum(), int(value))))
 
+    def set_collective_entries(self, entries) -> None:
+        self.collective_count = len(entries)
+
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
         x = max(18, self.width() - self.zoom_bar.width() - 28)
@@ -1425,6 +1508,9 @@ class MemberEditDelegate(ClassColorDelegate):
         6: 165,  # gear
         7: 165,  # raid status
     }
+
+    def paint(self, painter, option, index):  # noqa: N802
+        super().paint(painter, self.parent().row_hover.paint_option(option, index), index)
 
     def createEditor(self, parent, option, index):  # noqa: N802
         column = index.column()
@@ -1505,9 +1591,10 @@ class RaidMatrixStatusDelegate(QStyledItemDelegate):
             super().paint(painter, option, index)
             return
         painter.save()
-        painter.fillRect(option.rect, QColor(str(background)))
+        fill = QColor(str(background))
+        painter.fillRect(option.rect, fill)
         painter.setFont(option.font)
-        painter.setPen(QColor("#ffffff"))
+        painter.setPen(QColor("#11161d" if fill.lightness() > 170 else "#ffffff"))
         painter.drawText(
             option.rect,
             Qt.AlignmentFlag.AlignCenter,
@@ -1546,19 +1633,23 @@ class MemberTable(QTableWidget):
 
     COLUMNS = (
         "name", "race", "class", "spec", "character_type", "raid_role",
-        "gear", "raid_status", "last_checked", "last_raid", "assigned_main",
+        "gear", "raid_status", "last_checked", "last_raid", "assigned_main", "armory",
     )
-    DEFAULT_COLUMN_WIDTHS = (260, 140, 145, 165, 145, 145, 120, 145, 125, 125, 170)
+    DEFAULT_COLUMN_WIDTHS = (260, 140, 145, 165, 145, 145, 120, 145, 125, 125, 170, 100)
     DEFAULT_COLUMN_ORDER = ("name", "race", "class", "spec", "raid_role", "gear",
-                            "raid_status", "last_checked", "last_raid", "character_type", "assigned_main")
+                            "raid_status", "last_checked", "last_raid", "character_type", "assigned_main", "armory")
     paste_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(0, len(self.COLUMNS), parent)
+        from app.qt_row_hover import install_row_hover
+
+        self.row_hover = install_row_hover(self, custom_delegate=True)
         self.setHorizontalHeaderLabels([
             tr("common.character"), tr("checker.race"), tr("common.class"), tr("common.spec"),
             tr("checker.table_main_twink"), tr("checker.table_raid_role"), tr("gear.label"), tr("raid_status.label"),
             tr("checker.last_checked"), tr("checker.last_raid"), tr("checker.table_assigned_main"),
+            tr("checker.armory_link"),
         ])
         self.setAlternatingRowColors(True)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
@@ -1698,20 +1789,58 @@ class NumericSortItem(QTableWidgetItem):
 
 
 
+def _v2_roster_class_icon_size(zoom_percent: int) -> int:
+    return max(12, round(16 * max(0.40, min(1.40, zoom_percent / 100.0))))
+
+
+def _v2_roster_class_icon(class_name: str | None, zoom_percent: int) -> QLabel | None:
+    if not class_name:
+        return None
+    icon_path = class_icon_path(class_name)
+    if not icon_path.is_file():
+        return None
+    size = _v2_roster_class_icon_size(zoom_percent)
+    icon = QLabel()
+    icon.setFixedSize(size, size)
+    icon.setProperty("rosterClassIconPath", str(icon_path))
+    icon.setPixmap(QPixmap(str(icon_path)).scaled(
+        size, size, Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation))
+    icon.setToolTip(class_name)
+    icon.setStyleSheet("background:transparent;border:none;")
+    return icon
+
+
 class RosterCard(ClickableFrame):
     BASE_CARD_WIDTH = 205
     BASE_PORTRAIT_HEIGHT = 210
 
     def __init__(
         self,
-        model: GuildModel,
-        member: Member,
+        model: GuildModel | None,
+        member: Member | object,
         zoom_percent: int = 100,
         rank_path: Path | None = None,
         parent: QWidget | None = None,
+        *,
+        member_id: str | None = None,
+        portrait_path: Path | None = None,
+        role_label: str | None = None,
     ) -> None:
-        super().__init__(member.id, parent)
+        resolved_id = member_id if member_id is not None else member.id
+        super().__init__(resolved_id, parent)
         self.setProperty("innerCard", True)
+        self.setObjectName("rosterClassicCard")
+        self.setProperty("selected", False)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setStyleSheet("""
+            QFrame#rosterClassicCard {border:1px solid #394654;border-radius:5px;}
+            QFrame#rosterClassicCard:hover {border-color:#ae8245;}
+            QFrame#rosterClassicCard[selected="true"] {border-color:#e8c37c;}
+            QFrame#rosterClassicCard[selected="true"]:hover {border-color:#ffe0a0;}
+            QFrame#rosterClassicCard[pressed="true"] {border-color:#c99c59;background:#202a34;}
+            QFrame#rosterClassicCard[selected="true"][pressed="true"] {border-color:#ffe0a0;background:#2d271e;}
+        """)
         factor = max(0.60, min(1.40, int(zoom_percent) / 100.0))
         card_width = max(122, round(self.BASE_CARD_WIDTH * factor))
         portrait_width = max(104, card_width - max(10, round(18 * factor)))
@@ -1730,8 +1859,9 @@ class RosterCard(ClickableFrame):
         self.portrait = CoverImageLabel(tr("checker.missing_portrait"), portrait_surface)
         self.portrait.setGeometry(0, 0, portrait_width, portrait_height)
         self.portrait.setFixedSize(portrait_width, portrait_height)
-        self.portrait.set_source(member_portrait_path(model, member))
-        self.portrait.clicked.connect(lambda: self.clicked.emit(member.id))
+        self.portrait.set_source(
+            portrait_path if member_id is not None else member_portrait_path(model, member))
+        self.portrait.clicked.connect(lambda: self.clicked.emit(resolved_id))
 
         self.rank_icon = QLabel(portrait_surface)
         self.rank_icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -1780,9 +1910,22 @@ class RosterCard(ClickableFrame):
         details.setStyleSheet(
             f"color:{class_color};background:transparent;border:none;font-weight:600;font-size:{detail_size}pt;"
         )
-        layout.addWidget(details)
+        self.details_label = details
+        self.class_icon = (_v2_roster_class_icon(member.className, zoom_percent)
+                           if member_id is not None else None)
+        if self.class_icon is not None:
+            details_row = QHBoxLayout()
+            details_row.setContentsMargins(0, 0, 0, 0)
+            details_row.setSpacing(3)
+            details_row.addStretch(1)
+            details_row.addWidget(self.class_icon)
+            details_row.addWidget(details)
+            details_row.addStretch(1)
+            layout.addLayout(details_row)
+        else:
+            layout.addWidget(details)
 
-        badges = QLabel(f"{character_type_display(member.characterType)}  ·  {raid_role_display(member.raidRole)}")
+        badges = QLabel(f"{role_label if role_label is not None else character_type_display(member.characterType)}  ·  {raid_role_display(member.raidRole)}")
         badges.setWordWrap(True)
         badges.setAlignment(Qt.AlignmentFlag.AlignCenter)
         badge_size = max(7, round(8 * min(1.0, factor)))
@@ -1790,6 +1933,17 @@ class RosterCard(ClickableFrame):
             f"color:#9aa7b4;background:transparent;border:none;font-size:{badge_size}pt;"
         )
         layout.addWidget(badges)
+        for label in self.findChildren(QLabel):
+            if label is not self.portrait:
+                label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def set_selected(self, selected: bool) -> None:
+        if bool(self.property("selected")) == selected:
+            return
+        self.setProperty("selected", selected)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
 
 
 
@@ -1829,16 +1983,22 @@ class RosterPortraitLabel(CoverImageLabel):
             )
         if not self._source.isNull():
             scaled = self._source.scaled(
-                portrait_rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                portrait_rect.size(),
+                Qt.AspectRatioMode.KeepAspectRatio if self._contain_portrait
+                else Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation,
             )
-            source_rect = QRect(
-                max(0, (scaled.width() - portrait_rect.width()) // 2),
-                max(0, (scaled.height() - portrait_rect.height()) // 2),
-                portrait_rect.width(),
-                portrait_rect.height(),
-            )
-            painter.drawPixmap(portrait_rect, scaled, source_rect)
+            if self._contain_portrait:
+                target = QRect(QPoint(0, 0), scaled.size())
+                target.moveCenter(portrait_rect.center())
+                painter.drawPixmap(target, scaled)
+            else:
+                source_rect = QRect(
+                    max(0, (scaled.width() - portrait_rect.width()) // 2),
+                    max(0, (scaled.height() - portrait_rect.height()) // 2),
+                    portrait_rect.width(), portrait_rect.height(),
+                )
+                painter.drawPixmap(portrait_rect, scaled, source_rect)
         else:
             painter.setPen(QColor("#a9b1b9"))
             painter.drawText(
@@ -1892,10 +2052,18 @@ class ManagementPortraitLabel(RosterPortraitLabel):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         frame, frame_rect, area = self.frame_geometry()
         if not self._source.isNull():
-            target = self.portrait_target_rect(area)
+            scaled = self._source.scaled(
+                area.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            source_rect = QRect(
+                max(0, (scaled.width() - area.width()) // 2),
+                max(0, (scaled.height() - area.height()) // 2),
+                area.width(), area.height(),
+            )
             painter.save()
             painter.setClipRect(area)
-            painter.drawPixmap(target, self._source)
+            painter.drawPixmap(area, scaled, source_rect)
             painter.restore()
         else:
             painter.setPen(QColor("#a9b1b9"))
@@ -1983,10 +2151,14 @@ class RosterDraftCard(ClickableFrame):
     MIN_PORTRAIT_HEIGHT = 112
 
     def __init__(
-        self, model: GuildModel, member: Member, zoom_percent: int,
+        self, model: GuildModel | None, member: Member | object, zoom_percent: int,
         rank_path: Path | None = None,
+        *, member_id: str | None = None,
+        portrait_path: Path | None = None,
+        role_label: str | None = None,
     ) -> None:
-        super().__init__(member.id)
+        resolved_id = member_id if member_id is not None else member.id
+        super().__init__(resolved_id)
         self.card_width, portrait_width, portrait_height = self.metrics_for_zoom(zoom_percent)
         self.setFixedWidth(self.card_width)
         self.setObjectName("rosterDraftCard")
@@ -2000,6 +2172,8 @@ class RosterDraftCard(ClickableFrame):
             QFrame#rosterDraftCard:hover {border-color:#ae8245;background:#263038;}
             QFrame#rosterDraftCard[selected="true"] {border-color:#e8c37c;background:#352c20;}
             QFrame#rosterDraftCard[selected="true"]:hover {border-color:#ffe0a0;}
+            QFrame#rosterDraftCard[pressed="true"] {border-color:#c99c59;background:#1d272e;}
+            QFrame#rosterDraftCard[selected="true"][pressed="true"] {border-color:#ffe0a0;background:#2d271e;}
             QLabel {background:transparent;border:none;}
         """)
         layout = QVBoxLayout(self)
@@ -2007,8 +2181,9 @@ class RosterDraftCard(ClickableFrame):
         layout.setSpacing(5)
         self.portrait = CoverImageLabel(tr("checker.missing_portrait"))
         self.portrait.setFixedSize(portrait_width, portrait_height)
-        self.portrait.set_source(member_portrait_path(model, member))
-        self.portrait.clicked.connect(lambda: self.clicked.emit(member.id))
+        self.portrait.set_source(
+            portrait_path if member_id is not None else member_portrait_path(model, member))
+        self.portrait.clicked.connect(lambda: self.clicked.emit(resolved_id))
         layout.addWidget(self.portrait, 0, Qt.AlignmentFlag.AlignHCenter)
         nameplate = QWidget()
         nameplate.setStyleSheet("background:#211c17;border:none;")
@@ -2046,9 +2221,21 @@ class RosterDraftCard(ClickableFrame):
         self.details_label.setStyleSheet(
             f"color:{CLASS_COLORS.get(member.className, MUTED)};font-size:9pt;"
         )
-        layout.addWidget(self.details_label)
+        self.class_icon = (_v2_roster_class_icon(member.className, zoom_percent)
+                           if member_id is not None else None)
+        if self.class_icon is not None:
+            details_row = QHBoxLayout()
+            details_row.setContentsMargins(0, 0, 0, 0)
+            details_row.setSpacing(3)
+            details_row.addStretch(1)
+            details_row.addWidget(self.class_icon)
+            details_row.addWidget(self.details_label)
+            details_row.addStretch(1)
+            layout.addLayout(details_row)
+        else:
+            layout.addWidget(self.details_label)
         self.secondary_label = QLabel(
-            f"{character_type_display(member.characterType)} · {raid_role_display(member.raidRole)}"
+            f"{role_label if role_label is not None else character_type_display(member.characterType)} · {raid_role_display(member.raidRole)}"
         )
         self.secondary_label.setWordWrap(True)
         self.secondary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -2082,6 +2269,13 @@ class RosterDraftCard(ClickableFrame):
         self.card_width = card_width
         self.setFixedWidth(card_width)
         self.portrait.setFixedSize(portrait_width, portrait_height)
+        if self.class_icon is not None:
+            size = _v2_roster_class_icon_size(zoom_percent)
+            self.class_icon.setFixedSize(size, size)
+            self.class_icon.setPixmap(QPixmap(
+                self.class_icon.property("rosterClassIconPath")).scaled(
+                    size, size, Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation))
         self.name_label.setMaximumWidth(max(80, card_width - 52))
         self.status_badge.setMaximumWidth(card_width - 16)
         self.updateGeometry()
@@ -2137,10 +2331,11 @@ class BenchPlayersDialog(QDialog):
 class RaidPointAdjustmentDialog(QDialog):
     """Edit only raid-bound adjustments; base and final points stay derived."""
 
-    def __init__(self, parent: QWidget, model: GuildModel, raid) -> None:
+    def __init__(self, parent: QWidget, model: GuildModel | object, raid) -> None:
         super().__init__(parent)
         self.model = model
         self.raid = raid
+        self.v2_rules = bool(getattr(model, "v2_raid_point_rules", False))
         self.entries = sorted(
             model.attendance_for_raid(raid.id),
             key=lambda entry: (
@@ -2186,7 +2381,8 @@ class RaidPointAdjustmentDialog(QDialog):
         for column, width in enumerate((150, 180, 120, 100, 116, 260, 100)):
             self.table.setColumnWidth(column, width)
         for row, entry in enumerate(self.entries):
-            base = base_points_for_status(entry.status)
+            base = base_points_for_status(
+                entry.status, raid.raidType if self.v2_rules else None)
             current = model.raid_points.adjustments.get(entry.id)
             for column, value in enumerate((
                 entry.playerNameSnapshot,
@@ -2204,11 +2400,13 @@ class RaidPointAdjustmentDialog(QDialog):
             reason.setMinimumWidth(180)
             reason.setMinimumHeight(30)
             reason.setPlaceholderText(tr("raid_points.reason_required"))
-            total = QLabel(str(max(0, base + adjustment.value())))
+            total = QLabel(str(base + adjustment.value() if self.v2_rules else
+                               max(0, base + adjustment.value())))
             total.setAlignment(Qt.AlignmentFlag.AlignCenter)
             adjustment.valueChanged.connect(
-                lambda value, spin=adjustment, label=total, points=base:
-                self._update_adjustment_preview(spin, label, points, value)
+                lambda value, spin=adjustment, label=total, points=base,
+                v2=self.v2_rules:
+                self._update_adjustment_preview(spin, label, points, value, v2)
             )
             self.table.setCellWidget(row, 4, adjustment)
             self.table.setCellWidget(row, 5, reason)
@@ -2228,9 +2426,10 @@ class RaidPointAdjustmentDialog(QDialog):
     @staticmethod
     def _update_adjustment_preview(
         adjustment: QSpinBox, total: QLabel, base: int, value: int,
+        v2_rules: bool = False,
     ) -> None:
         adjustment.setPrefix("+" if value > 0 else "")
-        total.setText(str(max(0, base + value)))
+        total.setText(str(base + value if v2_rules else max(0, base + value)))
 
     def _accept_if_valid(self) -> None:
         for _entry, adjustment, reason, _total in self._editors:
@@ -2250,16 +2449,18 @@ class RaidPointAdjustmentDialog(QDialog):
 
 
 class RaidEditorDialog(QDialog):
-    def __init__(self, parent: QWidget, raid=None, model: GuildModel | None = None) -> None:
+    def __init__(self, parent: QWidget, raid=None, model: GuildModel | None = None,
+                 *, v2_mode: bool = False) -> None:
         super().__init__(parent)
         self.raid = raid
         self.model = model
+        self.v2_mode = v2_mode
         self.csv_names: list[str] = []
         self.csv_duplicates: list[str] = []
         self.unknown_decisions: dict[str, tuple[str, str | None]] = {}
         self.csv_resolution = None
         self.csv_open_names: list[str] = []
-        self.csv_ready = False
+        self.csv_ready = v2_mode
         self.bench_player_ids: set[str] = set()
         self.adjust_points_after_save = False
         if model is not None and raid is not None:
@@ -2275,6 +2476,8 @@ class RaidEditorDialog(QDialog):
         self.name_edit = QLineEdit(raid.name if raid else "")
         self.url_edit = QLineEdit(raid.warcraftLogsUrl if raid else "")
         self.raid_type_combo = QComboBox()
+        self.raid_type_combo.setMinimumHeight(
+            max(34, self.raid_type_combo.fontMetrics().height() + 16))
         self.raid_type_combo.addItem(tr("common.not_set"), "")
         for raid_type in RAID_TYPES:
             self.raid_type_combo.addItem(raid_type, raid_type)
@@ -2286,7 +2489,7 @@ class RaidEditorDialog(QDialog):
         form.addRow(tr("raids.warcraft_logs"), self.url_edit)
         layout.addLayout(form)
 
-        if raid is None:
+        if raid is None and not v2_mode:
             csv_row = QHBoxLayout()
             self.csv_path_label = QLineEdit()
             self.csv_path_label.setReadOnly(True)
@@ -2452,6 +2655,8 @@ class RaidEditorDialog(QDialog):
         return self.model.resolve_raid_attendance(self.csv_names)
 
     def _csv_present_player_ids(self) -> set[str]:
+        if self.v2_mode:
+            return set()
         resolution = self._current_csv_resolution()
         if resolution is None or self.model is None:
             return set()
@@ -3423,7 +3628,8 @@ class PlayerProfilePage(QWidget):
         summary_layout = QHBoxLayout(self.player_summary)
         summary_layout.setContentsMargins(16, 9, 16, 9)
         summary_layout.setSpacing(16)
-        self.player_metrics, self.player_metric_labels = self._build_metrics(
+        (self.player_metrics, self.player_metric_labels,
+         self.player_metric_titles) = self._build_metrics(
             ("player_rank", "eternal_dkp", "raids", "attendance"),
             columns=4,
         )
@@ -3541,50 +3747,18 @@ class PlayerProfilePage(QWidget):
         layout.addWidget(self.player_card)
         layout.addStretch(1)
         scroll.setWidget(content)
-        variants = QHBoxLayout()
-        variants.setContentsMargins(18, 8, 18, 0)
-        self.variant_buttons = QButtonGroup(self)
-        self.variant_buttons.setExclusive(True)
-        for display_index, key in enumerate(("variant_draft", "variant_classic")):
-            button = QPushButton(tr(f"roster.{key}"))
-            button.setObjectName("viewSwitchButton")
-            button.setCheckable(True)
-            stack_index = 1 - display_index
-            button.setChecked(display_index == 0)
-            self.variant_buttons.addButton(button, stack_index)
-            variants.addWidget(button)
-        variants.addStretch(1)
-        outer.addLayout(variants)
-        self.variant_stack = QStackedWidget()
-        self.variant_stack.addWidget(scroll)
+        scroll.hide()  # Legacy layout remains internal for compatibility.
         self.draft_page = PlayerProfileDraftPage()
-        self.variant_stack.addWidget(self.draft_page)
-        self.variant_stack.setCurrentIndex(1)
-        self.variant_buttons.idClicked.connect(self._switch_profile_variant)
-        outer.addWidget(self.variant_stack)
-
-    def _switch_profile_variant(self, index: int) -> None:
-        views = (self, self.draft_page)
-        source = views[self.variant_stack.currentIndex()].character_raid_table
-        target = views[index].character_raid_table
-        current = source.currentItem()
-        raid_id = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
-        self.variant_stack.setCurrentIndex(index)
-        if raid_id:
-            for row in range(target.rowCount()):
-                item = target.item(row, 0)
-                if item is not None and item.data(Qt.ItemDataRole.UserRole) == raid_id:
-                    target.setCurrentCell(row, 0)
-                    target.scrollToItem(item)
-                    break
+        outer.addWidget(self.draft_page, 1)
 
     @staticmethod
     def _build_metrics(
             keys: tuple[str, ...] = ("attendance", "raids", "points", "eternal_dkp", "streak"),
             *, columns: int = 2, list_mode: bool = False,
-    ) -> tuple[QWidget, dict[str, QLabel]]:
+    ) -> tuple[QWidget, dict[str, QLabel], dict[str, QLabel]]:
         container = QWidget()
         labels: dict[str, QLabel] = {}
+        title_labels: dict[str, QLabel] = {}
         titles = {
             "player_rank": tr("player_profile.player_rank"),
             "attendance": tr("player_profile.attendance"),
@@ -3601,9 +3775,11 @@ class PlayerProfilePage(QWidget):
             for key in keys:
                 value = QLabel("–")
                 value.setStyleSheet("font-size:10pt;font-weight:700;")
-                form.addRow(QLabel(titles[key]), value)
+                heading = QLabel(titles[key])
+                form.addRow(heading, value)
                 labels[key] = value
-            return container, labels
+                title_labels[key] = heading
+            return container, labels, title_labels
         grid = QGridLayout(container)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(6)
@@ -3624,9 +3800,10 @@ class PlayerProfilePage(QWidget):
             card_layout.addWidget(value)
             grid.addWidget(card, index // max(1, columns), index % max(1, columns))
             labels[key] = value
-        return container, labels
+            title_labels[key] = heading
+        return container, labels, title_labels
 
-    def set_point_system(self, mode: str) -> None:
+    def set_point_system(self, mode: str, *, identity_v2: bool = False) -> None:
         title = (
             tr("raid_points.title") if mode == POINT_MODE_RAID
             else tr("player_profile.dkp") if mode == POINT_MODE_ETERNAL
@@ -3641,6 +3818,21 @@ class PlayerProfilePage(QWidget):
         )
         if heading is not None:
             heading.setText(title)
+        eternal_title = (
+            tr("identity_v2_raid_points.eternal_player")
+            if identity_v2 and mode == POINT_MODE_RAID else
+            tr("raid_clm_admin.eternal_player") if identity_v2 else
+            tr("raid_clm_admin.eternal_dkp"))
+        self.player_metric_titles["eternal_dkp"].setText(eternal_title)
+        eternal_character_title = (
+            tr("identity_v2_character_data.detail_eternal_raid_points")
+            if identity_v2 and mode == POINT_MODE_RAID else
+            tr("raid_clm_admin.eternal_character") if identity_v2 else
+            tr("raid_clm_admin.eternal_dkp"))
+        eternal_heading = self.character_details_form.labelForField(
+            self.character_metric_labels["eternal_dkp"])
+        if eternal_heading is not None:
+            eternal_heading.setText(eternal_character_title)
 
     def set_character_navigation(self, *, has_previous: bool, has_next: bool) -> None:
         self.character_previous_button.setEnabled(has_previous)
@@ -3746,6 +3938,7 @@ class PlayerProfileDraftPage(PlayerProfilePage):
         self.main_caption.setObjectName("subtle")
         hero_body.addWidget(self.main_caption)
         self.player_metric_labels = {}
+        self.player_metric_titles = {}
         metrics = QHBoxLayout()
         for key, caption in (
             ("player_rank", tr("player_profile.player_rank")),
@@ -3763,6 +3956,7 @@ class PlayerProfileDraftPage(PlayerProfilePage):
             column.addWidget(value)
             metrics.addLayout(column, 2 if key == "attendance" else 1)
             self.player_metric_labels[key] = value
+            self.player_metric_titles[key] = label
         hero_body.addLayout(metrics)
         body.addWidget(hero)
 
@@ -3949,6 +4143,11 @@ class PlayerProfileDraftPage(PlayerProfilePage):
             button.setCheckable(True)
             button.setChecked(character.member_id == profile.selected_member_id)
             button.setStyleSheet(f"color:{CLASS_COLORS.get(character.class_name, MUTED)};")
+            if character.main_periods:
+                button.setToolTip("\n".join(
+                    f"{tr('identity_v2_main_history.column_from')}: {start or '–'} · "
+                    f"{tr('identity_v2_main_history.column_to')}: {end or '–'}"
+                    for start, end in character.main_periods))
             button.clicked.connect(lambda _checked=False, member_id=character.member_id: self.characterSelected.emit(member_id))
             self.family_buttons[character.member_id] = button
             self.family_layout.addWidget(button)
@@ -3962,19 +4161,43 @@ class PlayerProfileDraftPage(PlayerProfilePage):
 
 
 class GuildGearCheckerQt(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, store=None, project_path: Path | str | None = None,
+                 settings_path: Path | str | None = None) -> None:
         super().__init__()
+        from app.identity_v2 import IdentityV2Store
+        from app.identity_v2_storage import load_identity_v2
+
+        initial_store = (store if store is not None else
+                         load_identity_v2(project_path) if project_path is not None
+                         else IdentityV2Store())
+        initial_store.validate()
         self.setWindowTitle(f"{APP_NAME} · Qt v{APP_VERSION}")
         self.setMinimumSize(1040, 680)
+        # GuildModel remains an adapter for existing widgets, never the project save.
         self.model = GuildModel()
         self.model.new_empty()
+        self.project_mode = "initializing"
+        self.identity_v2_store = None
+        self.identity_v2_project_path: Path | None = None
+        self._v2_project_file_signature: tuple[int, int] | None = None
+        self.identity_v2_dirty = False
+        self._v2_raid_point_projection = None
+        self._v2_raid_point_signature = None
+        self._v2_raid_point_error: str | None = None
+        self.csv_v2_import_plan = None
+        self.csv_v2_review_choices: dict = {}
         self.selected_member_id: str | None = None
         self.member_tab = "Gildenliste"
         self.sort_state: dict[str, tuple[str, bool]] = {}
-        self._suite_settings_path = app_base_dir() / "config" / "suite_settings.json"
+        self._suite_settings_path = (Path(settings_path) if settings_path is not None
+                                     else app_base_dir() / "config" / "suite_settings.json")
         self._suite_settings = read_suite_settings(self._suite_settings_path)
         self._clm_refresh_service = ClmDkpRefreshService()
         self._clm_dkp_by_member_id: dict[str, int | float] = {}
+        self._v2_current_dkp_by_member_id: dict[str, int | float] = {}
+        self._v2_dkp_projection = None
+        self._v2_dkp_snapshot = None
+        self._v2_dkp_cache_project_path: Path | None = None
         self._raid_point_projection: tuple[object, ...] | None = None
         self._raid_view_dirty = {
             "raids": True, "attendance": True, "matrix": True,
@@ -4004,7 +4227,7 @@ class GuildGearCheckerQt(QMainWindow):
         self._graveyard_zoom_save_timer.timeout.connect(self._persist_graveyard_zoom)
         try:
             self._roster_zoom_percent = max(
-                ROSTER_CLASSIC_ZOOM_MIN,
+                ROSTER_DRAFT_ZOOM_MIN,
                 min(ROSTER_ZOOM_MAX, int(self._suite_settings.get("roster_zoom_percent", 100))),
             )
         except (TypeError, ValueError):
@@ -4016,9 +4239,11 @@ class GuildGearCheckerQt(QMainWindow):
         self._roster_zoom_timer.timeout.connect(self._apply_roster_zoom)
         self._roster_cards: list[QWidget] = []
         self._roster_view_mode = "cards"
-        self._roster_presentation = "draft"  # Session-only default; no persistence.
         self._roster_cards_dirty = True
         self._roster_list_dirty = True
+        self._v2_roster_items = ()
+        self._v2_roster_by_id = {}
+        self._v2_roster_visible_ids: set[str] = set()
         self._roster_list_sort_column = 0
         self._roster_list_sort_order = Qt.SortOrder.AscendingOrder
         self._member_table_refreshing = False
@@ -4045,7 +4270,7 @@ class GuildGearCheckerQt(QMainWindow):
         self._build_menu()
         self._build_ui()
         self._restore_geometry()
-        self._load_autosave_or_seed()
+        self.adopt_identity_v2_project(initial_store, project_path)
         self.refresh_all(select_first=False)
 
         self._portrait_timer = QTimer(self)
@@ -4060,13 +4285,7 @@ class GuildGearCheckerQt(QMainWindow):
 
     # ---------- setup ----------
     def _load_qt_font(self) -> None:
-        font_path = app_base_dir() / "assets" / "fonts" / "LifeCraft_Font.ttf"
-        self.decorative_font_family = "Segoe UI"
-        if font_path.is_file():
-            font_id = QFontDatabase.addApplicationFont(str(font_path))
-            families = QFontDatabase.applicationFontFamilies(font_id) if font_id >= 0 else []
-            if families:
-                self.decorative_font_family = families[0]
+        self.decorative_font_family = decorative_font_family()
 
     def _restore_geometry(self) -> None:
         raw = str(self._suite_settings.get("checker_qt_geometry") or "")
@@ -4089,8 +4308,10 @@ class GuildGearCheckerQt(QMainWindow):
 
     def _build_menu(self) -> None:
         menu = self.menuBar().addMenu(tr("common.file"))
+        self._legacy_project_actions: list[QAction] = []
         actions = (
             (tr("checker.new_empty"), self.new_project),
+            (tr("clm_v2_init.menu"), self.initialize_v2_from_clm),
             (tr("checker.open"), self.open_project),
             (tr("common.save"), self.save_project),
             (tr("checker.save_as"), self.save_project_as),
@@ -4103,12 +4324,18 @@ class GuildGearCheckerQt(QMainWindow):
         export = QAction(tr("checker.export"), self)
         export.triggered.connect(self.export_project)
         menu.addAction(export)
+        self.export_menu_action = export
+        self._legacy_project_actions.append(export)
         package = QAction(tr("checker.export_with_portraits"), self)
         package.triggered.connect(self.export_project_with_portraits)
         menu.addAction(package)
+        self.package_export_menu_action = package
+        self._legacy_project_actions.append(package)
         package_import = QAction(tr("checker.package_import"), self)
         package_import.triggered.connect(self.import_project_with_portraits)
         menu.addAction(package_import)
+        self.package_import_menu_action = package_import
+        self._legacy_project_actions.append(package_import)
         menu.addSeparator()
         quit_action = QAction(tr("common.quit"), self)
         quit_action.triggered.connect(self.close)
@@ -4118,17 +4345,27 @@ class GuildGearCheckerQt(QMainWindow):
         grabber = QAction(tr("checker.launch_grabber"), self)
         grabber.triggered.connect(self.open_portrait_grabber)
         tools.addAction(grabber)
+        self.grabber_menu_action = grabber
+        self._legacy_project_actions.append(grabber)
         portrait_folder = QAction(tr("checker.open_portrait_folder"), self)
         portrait_folder.triggered.connect(self.open_active_portrait_folder)
         tools.addAction(portrait_folder)
+        self.portrait_folder_menu_action = portrait_folder
+        self._legacy_project_actions.append(portrait_folder)
         roster_export = QAction(tr("roster.export_png"), self)
         roster_export.triggered.connect(self.export_roster_png)
         tools.addAction(roster_export)
-        legacy = QAction(tr("checker.launch_legacy"), self)
-        legacy.triggered.connect(self.launch_legacy_checker)
-        tools.addAction(legacy)
+        self.roster_export_menu_action = roster_export
+        self._legacy_project_actions.append(roster_export)
 
     def _build_ui(self) -> None:
+        project_root = str(Path(__file__).resolve().parents[1])
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from app.identity_v2_character_data_qt import IdentityV2CharacterDataPage
+        from app.identity_v2_players_qt import IdentityV2PlayersPage
+        from app.identity_v2_views_qt import IdentityV2RaidPage, IdentityV2RosterPage
+
         root = QWidget()
         outer = QVBoxLayout(root)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -4152,6 +4389,7 @@ class GuildGearCheckerQt(QMainWindow):
         grabber_button = QPushButton(tr("checker.portrait_grabber"))
         grabber_button.setToolTip(tr("checker.grabber_handoff"))
         grabber_button.clicked.connect(self.open_portrait_grabber)
+        self.grabber_button = grabber_button
         header_layout.addWidget(grabber_button)
         version = QLabel(f"Qt · {APP_VERSION}\nEU · Stitches · Classic Era")
         version.setObjectName("appMeta")
@@ -4180,6 +4418,30 @@ class GuildGearCheckerQt(QMainWindow):
         nav_layout.addStretch(1)
         outer.addWidget(nav)
 
+        self._v2_management_tab = "players"
+        self.v2_management_tabs = QFrame()
+        v2_tabs_layout = QHBoxLayout(self.v2_management_tabs)
+        v2_tabs_layout.setContentsMargins(14, 4, 14, 4)
+        v2_tabs_layout.setSpacing(6)
+        self._v2_management_buttons = {}
+        for key, label, target in (
+            ("players", tr("identity_v2_players.title"), "identity_v2_players"),
+            ("characters", tr("identity_v2_character_data.title"),
+             "identity_v2_character_data"),
+        ):
+            button = QPushButton(label)
+            button.setObjectName("subnavButton")
+            button.setProperty("v2ManagementTab", True)
+            button.setMinimumHeight(36)
+            button.setCheckable(True)
+            button.clicked.connect(
+                lambda _checked=False, page=target: self.switch_page(page))
+            v2_tabs_layout.addWidget(button)
+            self._v2_management_buttons[key] = button
+        v2_tabs_layout.addStretch(1)
+        self.v2_management_tabs.hide()
+        outer.addWidget(self.v2_management_tabs)
+
         self.stack = QStackedWidget()
         self._pages["rooster"] = self._build_roster_page()
         self.player_profile_page = PlayerProfilePage()
@@ -4195,6 +4457,38 @@ class GuildGearCheckerQt(QMainWindow):
         self._pages["management"] = self._build_member_page()
         self._pages["raid"] = self._build_raid_page()
         self._pages["settings"] = self._build_settings_page()
+        self.v2_roster_page = IdentityV2RosterPage(embedded=True)
+        self.roster_content_stack.addWidget(self.v2_roster_page)
+        self.v2_roster_page.table.itemSelectionChanged.connect(
+            self._v2_roster_list_selection_changed)
+        self.v2_raid_page = IdentityV2RaidPage()
+        self.v2_players_page = IdentityV2PlayersPage(
+            layout_settings=self._suite_settings,
+        )
+        self.v2_character_data_page = IdentityV2CharacterDataPage(
+            layout_settings=self._suite_settings,
+        )
+        self.v2_character_data_page.set_gravestone_templates_provider(
+            lambda: tuple(self._v2_grave_inventory_by_id().values()))
+        self.v2_raid_page.analyze_csv_button.clicked.connect(self.analyze_v2_csv_files)
+        self.v2_raid_page.show_matrix_button.clicked.connect(
+            lambda: self.switch_page("identity_v2_matrix"))
+        self.v2_raid_page.adjust_points_button.clicked.connect(
+            self._adjust_v2_raid_points)
+        self.v2_raid_page.rebuild_points_button.clicked.connect(
+            self._rebuild_v2_raid_points)
+        self.v2_raid_page.show_points_button.clicked.connect(
+            lambda: self.switch_page("identity_v2_points"))
+        self.v2_players_page.storeChanged.connect(self._apply_v2_player_store)
+        self.v2_players_page.profileRequested.connect(self.open_player_profile)
+        self.v2_character_data_page.storeChanged.connect(self._apply_v2_character_store)
+        self.v2_players_page.pointHistoryRequested.connect(
+            lambda player_id: self._open_v2_point_history("player", player_id))
+        self.v2_character_data_page.pointHistoryRequested.connect(
+            lambda member_id: self._open_v2_point_history("character", member_id))
+        self._pages["identity_v2_raid"] = self.v2_raid_page
+        self._pages["identity_v2_players"] = self.v2_players_page
+        self._pages["identity_v2_character_data"] = self.v2_character_data_page
         for page in self._pages.values():
             self.stack.addWidget(page)
         outer.addWidget(self.stack, 1)
@@ -4209,6 +4503,181 @@ class GuildGearCheckerQt(QMainWindow):
         status.addPermanentWidget(self.count_label)
 
         self.switch_page("rooster", refresh=False)
+
+    def _set_project_mode(self, mode: str) -> None:
+        if mode not in ("legacy", "identity_v2"):
+            raise ValueError(f"Unbekannter Projektmodus: {mode}")
+        previous_mode = self.project_mode
+        self.project_mode = mode
+        v2_matrix = mode == "identity_v2"
+        if v2_matrix:
+            if not hasattr(self, "_legacy_matrix_sort_options"):
+                self._legacy_matrix_sort_options = [
+                    (self.matrix_sort.itemText(index), self.matrix_sort.itemData(index))
+                    for index in range(self.matrix_sort.count())]
+            blocked = self.matrix_sort.blockSignals(True)
+            self.matrix_sort.clear()
+            for key, label in (
+                ("name", tr("raids.sort_name")),
+                ("percent", tr("raids.sort_percent")),
+                ("day_percent", tr("identity_v2_matrix.day_percent")),
+                ("present", tr("raids.sort_present")),
+                ("bench", tr("raids.sort_bench")),
+                ("eligible", tr("raids.sort_eligible")),
+                ("current_streak", tr("raids.sort_current_streak")),
+                ("longest_streak", tr("raids.sort_longest_streak")),
+            ):
+                self.matrix_sort.addItem(label, key)
+            self.matrix_sort.blockSignals(blocked)
+            self._matrix_sort_key = "name"
+            self._matrix_sort_ascending = True
+            if previous_mode != "identity_v2":
+                self._legacy_had_point_history = (
+                    self.raid_subtabs.indexOf(self.point_history_page) >= 0)
+                self._legacy_had_dkp_history = (
+                    self.raid_subtabs.indexOf(self.dkp_history_page) >= 0)
+                self._legacy_raid_tab_visibility = [
+                    self.raid_subtabs.isTabVisible(index)
+                    for index in range(self.raid_subtabs.count())]
+                self._legacy_matrix_limit = self.matrix_raid_limit.currentData()
+                self._legacy_matrix_view_mode = self._raid_view_mode("matrix")
+            if self.raid_subtabs.indexOf(self.point_history_page) < 0:
+                self.raid_subtabs.addTab(
+                    self.point_history_page,
+                    tr("identity_v2_raid_points.history_tab"))
+            for index in range(self.raid_subtabs.count()):
+                self.raid_subtabs.setTabVisible(
+                    index, self.raid_subtabs.widget(index) in (
+                        self.raids_page, self.attendance_page,
+                        self.point_history_page))
+            self.raid_subtabs.setCurrentWidget(self.raids_page)
+            self.matrix_raid_limit.setCurrentIndex(
+                self.matrix_raid_limit.findData(0))
+            (self.matrix_view_character_button if self._v2_matrix_level == "character"
+             else self.matrix_view_player_button).setChecked(True)
+            (self.v2_matrix_day_button if self._v2_matrix_grouping == "day"
+             else self.v2_matrix_raid_button).setChecked(True)
+            (self.v2_matrix_class_button if self._v2_matrix_colors == "class"
+             else self.v2_matrix_status_button).setChecked(True)
+        else:
+            history_index = self.raid_subtabs.indexOf(self.point_history_page)
+            if history_index >= 0:
+                self.raid_subtabs.setTabText(
+                    history_index, tr("raid_points.history_tab"))
+            if not getattr(self, "_legacy_had_point_history", False):
+                history_index = self.raid_subtabs.indexOf(self.point_history_page)
+                if history_index >= 0:
+                    self.raid_subtabs.removeTab(history_index)
+            if not getattr(self, "_legacy_had_dkp_history", False):
+                history_index = self.raid_subtabs.indexOf(self.dkp_history_page)
+                if history_index >= 0:
+                    self.raid_subtabs.removeTab(history_index)
+            if hasattr(self, "_legacy_matrix_sort_options"):
+                blocked = self.matrix_sort.blockSignals(True)
+                self.matrix_sort.clear()
+                for label, key in self._legacy_matrix_sort_options:
+                    self.matrix_sort.addItem(label, key)
+                self.matrix_sort.blockSignals(blocked)
+                self._matrix_sort_key = "name"
+                self._matrix_sort_ascending = True
+            for index, visible in enumerate(getattr(
+                    self, "_legacy_raid_tab_visibility", ())):
+                if index < self.raid_subtabs.count():
+                    self.raid_subtabs.setTabVisible(index, visible)
+            if hasattr(self, "_legacy_matrix_limit"):
+                index = self.matrix_raid_limit.findData(self._legacy_matrix_limit)
+                if index >= 0:
+                    self.matrix_raid_limit.setCurrentIndex(index)
+            (self.matrix_view_character_button if getattr(
+                self, "_legacy_matrix_view_mode", "player") == "character"
+             else self.matrix_view_player_button).setChecked(True)
+        self.v2_matrix_options.setVisible(v2_matrix)
+        self.v2_matrix_back_button.setVisible(v2_matrix)
+        self.v2_points_back_button.setVisible(v2_matrix)
+        self.v2_character_data_page.set_project_path(
+            self.identity_v2_project_path if mode == "identity_v2" else None)
+        self.v2_roster_class_filter.setVisible(mode == "identity_v2")
+        self.v2_roster_sort.setVisible(mode == "identity_v2")
+        self.roster_export_button.setVisible(True)
+        self._roster_cards_dirty = True
+        self._roster_list_dirty = True
+        legacy_enabled = mode == "legacy"
+        v2_navigation = ("rooster", "graveyard", "management", "raid", "settings")
+        for key, button in self._nav_buttons.items():
+            button.setEnabled(legacy_enabled or key in v2_navigation)
+            button.setChecked(False)
+            button.setToolTip(
+                "" if legacy_enabled or key in v2_navigation
+                else tr("identity_v2_project.legacy_disabled")
+            )
+        self._nav_buttons["management"].setText(tr("tabs.management"))
+        point_tip = (tr("identity_v2_project.point_mode_help")
+                     if mode == "identity_v2" else "")
+        self.points_enabled_check.setToolTip(point_tip)
+        self.dkp_enabled_check.setToolTip(point_tip)
+        for action in self._legacy_project_actions:
+            v2_tool = action in (
+                self.grabber_menu_action, self.portrait_folder_menu_action,
+                self.package_export_menu_action)
+            enabled = legacy_enabled or (
+                action in (self.export_menu_action,
+                           self.package_import_menu_action,
+                           self.roster_export_menu_action)
+                or v2_tool and self.identity_v2_project_path is not None)
+            action.setEnabled(enabled)
+            action.setToolTip(
+                "" if enabled else tr("identity_v2_project.legacy_disabled"))
+        self.grabber_button.setEnabled(
+            legacy_enabled or self.identity_v2_project_path is not None)
+        self.grabber_button.setToolTip(
+            tr("checker.grabber_handoff") if legacy_enabled
+            else tr("identity_v2_graveyard.grabber_tooltip")
+        )
+        if mode == "identity_v2":
+            if hasattr(self, "clm_roster_combo"):
+                self.clm_roster_combo.clear()
+                self._restore_v2_clm_roster_selection()
+                self.points_status_label.clear()
+            self.roster_selected_member_id = None
+            self.roster_detail_panel.hide()
+            self._populate_matrix_subjects(reset=True)
+            self._v2_management_tab = "players"
+            self.v2_management_tabs.hide()
+            self._detail_autosave_timer.stop()
+            self._detail_autosave_dirty = False
+            self._invalidate_project_handoff()
+            self.count_label.setText("")
+            self.stack.setCurrentWidget(self._pages["rooster"])
+            self._sync_v2_point_presentation()
+        else:
+            self.roster_selected_member_id = None
+            self.roster_detail_panel.hide()
+            self._v2_attendance_adapter = None
+            self._v2_matrix_cache.clear()
+            self._v2_raid_point_projection = None
+            self._v2_raid_point_signature = None
+            self._v2_raid_point_error = None
+            self._v2_dkp_snapshot = None
+            self._v2_dkp_cache_project_path = None
+            self._v2_current_dkp_by_member_id = {}
+            self._v2_dkp_projection = None
+            self.v2_character_data_page.set_point_projection(None)
+            self.v2_players_page.set_point_projection(None)
+            self._populate_matrix_subjects(reset=True)
+            self.v2_players_page.set_store(None, reset_filters=True)
+            self.v2_character_data_page.set_store(None, reset_filters=True)
+            self.identity_v2_store = None
+            self.identity_v2_project_path = None
+            self._v2_project_file_signature = None
+            self.identity_v2_dirty = False
+            self.csv_v2_import_plan = None
+            self.csv_v2_review_choices = {}
+            self.switch_page("rooster", refresh=False)
+        self.refresh_project_label()
+        self._update_feature_controls()
+        if mode == "identity_v2" and self.identity_v2_store is not None:
+            self._refresh_v2_dkp_projection()
+            self.switch_page("rooster", refresh=False)
 
     # ---------- Verwaltung (interne member_* Namen bleiben für Kompatibilität bestehen) ----------
     def _build_member_page(self) -> QWidget:
@@ -4305,6 +4774,7 @@ class GuildGearCheckerQt(QMainWindow):
             self._suite_settings.get(MANAGEMENT_COLUMN_ORDER_SETTING)
         )
         self.member_table.currentItemChanged.connect(self._member_current_item_changed)
+        self.member_table.cellClicked.connect(self._member_table_cell_clicked)
         self.member_table.itemChanged.connect(self._member_table_item_changed)
         self.member_table.paste_requested.connect(self._paste_member_table)
         splitter.addWidget(self.member_table)
@@ -4479,8 +4949,7 @@ class GuildGearCheckerQt(QMainWindow):
         form.addRow(tr("checker.raid_role"), self.raid_role_combo)
         form.setRowVisible(self.associated_main_combo, False)
         for combo in (
-            self.race_combo, self.spec_combo, self.character_type_combo,
-            self.associated_main_combo, self.raid_role_combo,
+            self.race_combo, self.spec_combo, self.associated_main_combo, self.raid_role_combo,
         ):
             combo.currentIndexChanged.connect(self._detail_discrete_changed)
         return widget
@@ -4583,6 +5052,24 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_search_edit.setMaximumWidth(260)
         self.roster_search_edit.textChanged.connect(self.refresh_roster)
         top.addWidget(self.roster_search_edit)
+        self.v2_roster_class_filter = QComboBox()
+        self.v2_roster_class_filter.addItem(tr("identity_v2_views.all_classes"), None)
+        self.v2_roster_class_filter.currentIndexChanged.connect(self.refresh_roster)
+        self.v2_roster_class_filter.hide()
+        top.addWidget(self.v2_roster_class_filter)
+        self.v2_roster_sort = QComboBox()
+        for label, key in (
+            (tr("roster.column_name"), "name"),
+            (tr("roster.column_class"), "class"),
+            (tr("checker.raid_role"), "raid_role"),
+            (tr("roster.column_gear"), "gear"),
+            (tr("identity_v2_views.raid_rank"), "raid_rank"),
+            (tr("identity_v2_views.dkp_rank"), "dkp_rank"),
+        ):
+            self.v2_roster_sort.addItem(label, key)
+        self.v2_roster_sort.currentIndexChanged.connect(self.refresh_roster)
+        self.v2_roster_sort.hide()
+        top.addWidget(self.v2_roster_sort)
         top.addStretch(1)
 
         self.roster_cards_button = QPushButton(tr("roster.cards_view"))
@@ -4597,26 +5084,9 @@ class GuildGearCheckerQt(QMainWindow):
         top.addWidget(self.roster_cards_button)
         top.addWidget(self.roster_list_button)
 
-        self.roster_variant_controls = QWidget()
-        variant_row = QHBoxLayout(self.roster_variant_controls)
-        variant_row.setContentsMargins(0, 0, 0, 0)
-        variant_row.setSpacing(2)
-        self.roster_variant_group = QButtonGroup(self)
-        self.roster_variant_buttons = {}
-        for key, text_key in (("draft", "roster.variant_draft"), ("classic", "roster.variant_classic")):
-            button = QPushButton(tr(text_key))
-            button.setObjectName("subnavButton")
-            button.setCheckable(True)
-            button.setChecked(key == self._roster_presentation)
-            button.clicked.connect(lambda _checked=False, variant=key: self._set_roster_presentation(variant))
-            self.roster_variant_group.addButton(button)
-            self.roster_variant_buttons[key] = button
-            variant_row.addWidget(button)
-        top.addWidget(self.roster_variant_controls)
-
         zoom_frame = QFrame()
         zoom_frame.setObjectName("rosterZoomBar")
-        zoom_frame.setProperty("modernView", self._roster_presentation == "draft")
+        zoom_frame.setProperty("modernView", True)
         self.roster_zoom_frame = zoom_frame
         zoom_row = QHBoxLayout(zoom_frame)
         zoom_row.setContentsMargins(8, 4, 8, 4)
@@ -4654,6 +5124,7 @@ class GuildGearCheckerQt(QMainWindow):
 
         export_button = QPushButton(tr("roster.export_png"))
         export_button.clicked.connect(self.export_roster_png)
+        self.roster_export_button = export_button
         top.addWidget(export_button)
         toolbar_content = QWidget()
         toolbar_content.setLayout(top)
@@ -4677,7 +5148,7 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_scroll.setWidget(self.roster_content)
         self.roster_content_stack = QStackedWidget()
         self.roster_content_stack.addWidget(self.roster_scroll)
-        self.roster_list = CopyableReadOnlyTable(0, 10)
+        self.roster_list = CopyableReadOnlyTable(0, 11)
         self.roster_list.setObjectName("rosterListTable")
         self.roster_list.setStyleSheet("""
             QTableWidget#rosterListTable {
@@ -4692,7 +5163,7 @@ class GuildGearCheckerQt(QMainWindow):
             tr("roster.column_character_type"), tr("roster.column_gear"),
             tr("roster.column_raid_status"), tr("roster.column_life_status"),
             tr("roster.column_current_dkp"), tr("roster.column_eternal_character"),
-            tr("roster.column_eternal_player"),
+            tr("roster.column_eternal_player"), tr("checker.armory_link"),
         ])
         self.roster_list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.roster_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -4703,9 +5174,9 @@ class GuildGearCheckerQt(QMainWindow):
         roster_list_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         roster_list_header.setMinimumSectionSize(60)
         roster_list_header.setStretchLastSection(False)
-        for column, width in enumerate((210, 120, 95, 120, 110, 145, 115, 125, 170, 170)):
+        for column, width in enumerate((210, 120, 95, 120, 110, 145, 115, 125, 170, 170, 105)):
             self.roster_list.setColumnWidth(column, width)
-        self.roster_list.cellClicked.connect(lambda row, _column: self._roster_list_clicked(row))
+        self.roster_list.cellClicked.connect(self._roster_list_cell_clicked)
         self.roster_list.cellDoubleClicked.connect(self._roster_list_profile_requested)
         self.roster_list.horizontalHeader().sortIndicatorChanged.connect(self._roster_list_sort_changed)
         self.roster_content_stack.addWidget(self.roster_list)
@@ -4856,10 +5327,15 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_current_dkp = QLabel("—")
         self.roster_character_points = QLabel("0")
         self.roster_player_points = QLabel("0")
+        self.roster_eternal_character_points = QLabel("—")
         roster_points_form.addRow(tr("raid_clm_admin.current_dkp"), self.roster_current_dkp)
         roster_points_form.addRow(tr("raid_points.character_points"), self.roster_character_points)
         roster_points_form.addRow(tr("raid_points.player_total"), self.roster_player_points)
+        roster_points_form.addRow(
+            tr("identity_v2_character_data.detail_eternal_raid_points"),
+            self.roster_eternal_character_points)
         roster_points_form.setRowVisible(self.roster_current_dkp, False)
+        roster_points_form.setRowVisible(self.roster_eternal_character_points, False)
         roster_points_layout.addLayout(roster_points_form)
         roster_points_actions = QHBoxLayout()
         self.roster_character_history = QPushButton(tr("raid_points.point_history"))
@@ -4871,16 +5347,13 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_player_history = QPushButton(tr("raid_points.player_history"))
         self.roster_player_history.clicked.connect(
             lambda: self.open_point_history_for_player(
-                getattr(
-                    self.model.find_by_id(getattr(self, "roster_selected_member_id", "")),
-                    "playerId", "",
-                )
-            )
+                self._roster_selected_player_id())
         )
         roster_points_actions.addWidget(self.roster_character_history)
         roster_points_actions.addWidget(self.roster_player_history)
         roster_points_layout.addLayout(roster_points_actions)
-        self.roster_points_section.setVisible(self.model.raid_points.enabled)
+        self.roster_points_section.setVisible(
+            self.project_mode == "identity_v2" or self.model.raid_points.enabled)
         layout.addWidget(self.roster_points_section)
 
         self.roster_dkp_section = QFrame()
@@ -4889,7 +5362,8 @@ class GuildGearCheckerQt(QMainWindow):
         roster_dkp_layout.setContentsMargins(10, 8, 10, 8)
         self.roster_dkp_value = QLabel("—")
         roster_dkp_layout.addRow(tr("raid_clm_admin.character_dkp"), self.roster_dkp_value)
-        self.roster_dkp_section.setVisible(self.model.dkp_enabled)
+        self.roster_dkp_section.setVisible(
+            self.project_mode != "identity_v2" and self.model.dkp_enabled)
         layout.addWidget(self.roster_dkp_section)
 
         notes_title = QLabel(tr("roster.notes"))
@@ -4904,6 +5378,7 @@ class GuildGearCheckerQt(QMainWindow):
 
         armory = QPushButton(tr("checker.open_armory"))
         armory.clicked.connect(lambda: self._open_armory_for_id(getattr(self, "roster_selected_member_id", "")))
+        self.roster_armory_button = armory
         layout.addWidget(armory)
         self.roster_profile_button = QPushButton(tr("player_profile.open_profile"))
         self.roster_profile_button.clicked.connect(
@@ -4917,7 +5392,7 @@ class GuildGearCheckerQt(QMainWindow):
         return panel
 
     def _roster_uses_draft(self) -> bool:
-        return self._roster_view_mode == "cards" and self._roster_presentation == "draft"
+        return self._roster_view_mode == "cards"
 
     def _arrange_roster_character_sheet(
         self, panel: QFrame, close: QPushButton, armory: QPushButton,
@@ -5031,7 +5506,10 @@ class GuildGearCheckerQt(QMainWindow):
         footer_layout.setContentsMargins(12, 8, 12, 10)
         footer_layout.setSpacing(8)
         self.roster_profile_button.setStyleSheet(
-            "background:#594322;border:1px solid #bc9455;color:#ffedca;padding:7px;"
+            "QPushButton {background:#594322;border:1px solid #bc9455;"
+            "color:#ffedca;padding:7px;}"
+            "QPushButton:disabled,QPushButton:disabled:hover {"
+            "background:#151b22;border:1px solid #252d35;color:#68727c;}"
         )
         footer_layout.addWidget(armory)
         footer_layout.addWidget(self.roster_profile_button)
@@ -5048,29 +5526,18 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_detail_panel = new_panel
         new_panel.hide()
         old_panel.deleteLater()
-        self._sync_points_ui_visibility()
-        self._refresh_visible_dkp_details()
-
-    def _set_roster_presentation(self, variant: str) -> None:
-        if variant not in ("classic", "draft") or variant == self._roster_presentation:
-            return
-        self._roster_presentation = variant
-        self.roster_zoom_frame.setProperty("modernView", variant == "draft")
-        zoom_style = self.roster_zoom_frame.style()
-        zoom_style.unpolish(self.roster_zoom_frame)
-        zoom_style.polish(self.roster_zoom_frame)
-        self.roster_zoom_frame.update()
-        self.roster_variant_buttons[variant].setChecked(True)
-        self._sync_roster_zoom_range()
-        self._roster_cards_dirty = True
-        self._sync_roster_detail_presentation()
-        self._refresh_current_roster_view()
+        if self.project_mode != "identity_v2":
+            self._sync_points_ui_visibility()
+            self._refresh_visible_dkp_details()
 
     def _apply_roster_card_selection(self) -> None:
         selected_id = getattr(self, "roster_selected_member_id", None)
         for card in self._roster_cards:
-            if isinstance(card, RosterDraftCard):
+            if isinstance(card, (RosterCard, RosterDraftCard)):
                 card.set_selected(card.member_id == selected_id)
+        if (self.project_mode == "identity_v2"
+                and self.v2_roster_page.selected_member_id() != selected_id):
+            self.v2_roster_page.select_member(selected_id)
 
     def _close_roster_detail(self) -> None:
         self.roster_selected_member_id = None
@@ -5083,10 +5550,20 @@ class GuildGearCheckerQt(QMainWindow):
         self._schedule_roster_reflow()
 
     def _roster_notes_changed(self) -> None:
+        if self.project_mode == "identity_v2":
+            return
         member = self.model.find_by_id(getattr(self, "roster_selected_member_id", ""))
         if member is not None and self.roster_detail_notes.hasFocus():
             member.note = self.roster_detail_notes.toPlainText()
             self.model.dirty = True
+
+    def _roster_selected_player_id(self) -> str:
+        member_id = getattr(self, "roster_selected_member_id", "")
+        if self.project_mode == "identity_v2":
+            item = self._v2_roster_by_id.get(member_id)
+            return item.playerId or "" if item is not None else ""
+        member = self.model.find_by_id(member_id)
+        return member.playerId or "" if member is not None else ""
 
     def _schedule_roster_reflow(self) -> None:
         if not hasattr(self, "roster_scroll"):
@@ -5142,12 +5619,12 @@ class GuildGearCheckerQt(QMainWindow):
 
     def _set_roster_view(self, mode: str) -> None:
         self._roster_view_mode = "list" if mode == "list" else "cards"
-        self.roster_variant_controls.setVisible(self._roster_view_mode == "cards")
         self._sync_roster_detail_presentation()
         self.roster_cards_button.setChecked(self._roster_view_mode == "cards")
         self.roster_list_button.setChecked(self._roster_view_mode == "list")
         self.roster_content_stack.setCurrentWidget(
-            self.roster_list if self._roster_view_mode == "list" else self.roster_scroll
+            (self.v2_roster_page if self.project_mode == "identity_v2" else self.roster_list)
+            if self._roster_view_mode == "list" else self.roster_scroll
         )
         self._refresh_current_roster_view()
 
@@ -5159,6 +5636,26 @@ class GuildGearCheckerQt(QMainWindow):
         item = self.roster_list.item(row, 0)
         if item is not None:
             self._show_roster_detail(str(item.data(Qt.ItemDataRole.UserRole) or ""))
+
+    def _v2_roster_list_selection_changed(self) -> None:
+        if self.project_mode != "identity_v2":
+            return
+        member_id = self.v2_roster_page.selected_member_id()
+        if member_id and member_id != getattr(self, "roster_selected_member_id", None):
+            self._show_roster_detail(member_id)
+
+    def _roster_list_cell_clicked(self, row: int, column: int) -> None:
+        self._roster_list_clicked(row)
+        if column == 10:
+            item = self.roster_list.item(row, 0)
+            if item is not None:
+                self._open_armory_for_id(str(item.data(Qt.ItemDataRole.UserRole) or ""))
+
+    def _member_table_cell_clicked(self, row: int, column: int) -> None:
+        if column == 11:
+            item = self.member_table.item(row, column)
+            if item is not None:
+                self._open_armory_for_id(str(item.data(Qt.ItemDataRole.UserRole) or ""))
 
     def _roster_list_profile_requested(self, row: int, column: int) -> None:
         if column != 0:
@@ -5195,6 +5692,7 @@ class GuildGearCheckerQt(QMainWindow):
 
     # ---------- Raid ----------
     def _build_raid_page(self) -> QWidget:
+        from app.qt_row_hover import install_row_hover
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(14, 12, 14, 14)
@@ -5274,6 +5772,7 @@ class GuildGearCheckerQt(QMainWindow):
         self.raid_splitter = QSplitter(Qt.Orientation.Vertical)
 
         self.raid_table = QTableWidget(0, 6)
+        self.raid_table.row_hover = install_row_hover(self.raid_table)
         self.raid_table.setHorizontalHeaderLabels([
             tr("common.date"), tr("raids.raid_type"), tr("raids.raid"),
             tr("raids.participants"), tr("common.status"), tr("raids.warcraft_logs"),
@@ -5338,6 +5837,8 @@ class GuildGearCheckerQt(QMainWindow):
         participants_top.addWidget(self.raid_toggle_bench_button)
         participants_layout.addLayout(participants_top)
         self.raid_participants_table = QTableWidget(0, 4)
+        self.raid_participants_table.row_hover = install_row_hover(
+            self.raid_participants_table)
         self.raid_participants_table.setHorizontalHeaderLabels([
             tr("raids.player"), tr("raids.character"), tr("raids.type"), tr("common.status"),
         ])
@@ -5381,20 +5882,80 @@ class GuildGearCheckerQt(QMainWindow):
         legend.setObjectName("subtle")
         matrix_toolbar.addWidget(legend)
         matrix_toolbar.addStretch(1)
+        self.v2_matrix_options = QWidget()
+        options_layout = QHBoxLayout(self.v2_matrix_options)
+        options_layout.setContentsMargins(0, 0, 0, 0)
+        options_layout.setSpacing(3)
+        self.v2_matrix_group = QButtonGroup(self)
+        self.v2_matrix_group.setExclusive(True)
+        self.v2_matrix_raid_button = QPushButton(tr("identity_v2_matrix.single_raids"))
+        self.v2_matrix_day_button = QPushButton(tr("identity_v2_matrix.raid_days"))
+        for button, value in ((self.v2_matrix_raid_button, "raid"),
+                              (self.v2_matrix_day_button, "day")):
+            button.setCheckable(True)
+            button.setProperty("v2Grouping", value)
+            self.v2_matrix_group.addButton(button)
+            options_layout.addWidget(button)
+        options_layout.addSpacing(8)
+        self.v2_matrix_color_group = QButtonGroup(self)
+        self.v2_matrix_color_group.setExclusive(True)
+        self.v2_matrix_status_button = QPushButton(tr("identity_v2_matrix.status_colors"))
+        self.v2_matrix_class_button = QPushButton(tr("identity_v2_matrix.class_colors"))
+        for button, value in ((self.v2_matrix_status_button, "status"),
+                              (self.v2_matrix_class_button, "class")):
+            button.setCheckable(True)
+            button.setProperty("v2Colors", value)
+            self.v2_matrix_color_group.addButton(button)
+            options_layout.addWidget(button)
+        self.v2_matrix_options.hide()
+        matrix_toolbar.addWidget(self.v2_matrix_options)
+        self.v2_matrix_back_button = QPushButton(tr("identity_v2_matrix.back_to_raids"))
+        self.v2_matrix_back_button.clicked.connect(
+            lambda: self.switch_page("raid"))
+        self.v2_matrix_back_button.hide()
+        matrix_toolbar.addWidget(self.v2_matrix_back_button)
         self.matrix_toggle_button = QPushButton(tr("raids.matrix_hide"))
         self.matrix_toggle_button.setObjectName("matrixToggleButton")
         self.matrix_toggle_button.setCheckable(True)
         self.matrix_toggle_button.clicked.connect(self._toggle_attendance_matrix)
         matrix_toolbar.addWidget(self.matrix_toggle_button)
         attendance_layout.addLayout(matrix_toolbar)
+        self.v2_matrix_group.buttonClicked.connect(self._v2_matrix_grouping_changed)
+        self.v2_matrix_color_group.buttonClicked.connect(self._v2_matrix_colors_changed)
 
         self._matrix_sort_key = "name"
         self._matrix_sort_ascending = True
         self._matrix_last_header_column: int | None = None
         self._matrix_raids = []
         self._matrix_players = []
+        self._v2_attendance_adapter = None
+        self._v2_matrix_cache: dict[tuple, tuple] = {}
+        self._v2_matrix_order: dict[str, list[str]] = {}
+        self._v2_matrix_cells_by_id: dict[str, tuple] = {}
+        self._v2_matrix_level = str(self._suite_settings.get(
+            "identity_v2_matrix_level", "player"))
+        self._v2_matrix_grouping = str(self._suite_settings.get(
+            "identity_v2_matrix_grouping", "raid"))
+        self._v2_matrix_colors = str(self._suite_settings.get(
+            "identity_v2_matrix_colors", "status"))
+        if self._v2_matrix_level not in ("player", "character"):
+            self._v2_matrix_level = "player"
+        if self._v2_matrix_grouping not in ("raid", "day"):
+            self._v2_matrix_grouping = "raid"
+        if self._v2_matrix_colors not in ("status", "class"):
+            self._v2_matrix_colors = "status"
         self._attendance_stats_column_widths: dict[int, int] = {}
         self._attendance_matrix_column_widths: dict[str, int] = {}
+        fixed_widths = self._suite_settings.get("identity_v2_matrix_fixed_widths", {})
+        matrix_widths = self._suite_settings.get("identity_v2_matrix_column_widths", {})
+        self._v2_matrix_fixed_widths = (
+            {str(key): int(value) for key, value in fixed_widths.items()
+             if isinstance(value, int) and 40 <= value <= 2400}
+            if isinstance(fixed_widths, dict) else {})
+        self._v2_matrix_column_widths = (
+            {str(key): int(value) for key, value in matrix_widths.items()
+             if isinstance(value, int) and 40 <= value <= 2400}
+            if isinstance(matrix_widths, dict) else {})
         self._matrix_syncing_scroll = False
         self._attendance_refresh_pending = False
         self._attendance_sort_pending = False
@@ -5404,6 +5965,7 @@ class GuildGearCheckerQt(QMainWindow):
         self.attendance_matrix_split.setObjectName("attendanceMatrixSplit")
 
         self.raid_stats_table = QTableWidget(0, RAID_ATTENDANCE_FIXED_COLUMNS)
+        self.raid_stats_table.row_hover = install_row_hover(self.raid_stats_table)
         self.raid_stats_table.setHorizontalHeaderLabels([
             tr("raids.player"), tr("raids.attendance_percent"), tr("raids.present"),
             tr("raids.bench"), tr("raids.relevant_raids"), tr("raids.main_count"),
@@ -5469,6 +6031,10 @@ class GuildGearCheckerQt(QMainWindow):
         history_page = QWidget()
         history_layout = QVBoxLayout(history_page)
         filters = QHBoxLayout()
+        self.v2_points_back_button = QPushButton(tr("identity_v2_matrix.back_to_raids"))
+        self.v2_points_back_button.clicked.connect(lambda: self.switch_page("raid"))
+        self.v2_points_back_button.hide()
+        filters.addWidget(self.v2_points_back_button)
         filters.addWidget(QLabel(tr("raid_points.filter_mode")))
         self.point_history_mode = QComboBox()
         self.point_history_mode.addItem(tr("raid_points.filter_player"), "player")
@@ -5480,6 +6046,7 @@ class GuildGearCheckerQt(QMainWindow):
         filters.addStretch(1)
         history_layout.addLayout(filters)
         self.point_history_table = QTableWidget(0, 8)
+        self.point_history_table.row_hover = install_row_hover(self.point_history_table)
         self.point_history_table.setHorizontalHeaderLabels([
             tr("common.date"), tr("raids.raid"), tr("raids.character"),
             tr("common.status"), tr("raid_points.base"),
@@ -5529,6 +6096,7 @@ class GuildGearCheckerQt(QMainWindow):
         dkp_hint.setObjectName("subtle")
         dkp_history_layout.addWidget(dkp_hint)
         self.dkp_history_table = QTableWidget(0, 6)
+        self.dkp_history_table.row_hover = install_row_hover(self.dkp_history_table)
         self.dkp_history_table.setHorizontalHeaderLabels([
             tr("common.date"), tr("dkp_history.source"), tr("raids.character"),
             tr("dkp_history.type"), tr("dkp_history.change"), tr("dkp_history.reason"),
@@ -5766,9 +6334,14 @@ class GuildGearCheckerQt(QMainWindow):
             QWidget#settingsPage QPushButton[primary="true"]:hover {
                 background:#3a3325; border-color:#c7a265;
             }
-            QWidget#settingsPage QCheckBox::indicator:checked,
-            QWidget#settingsPage QRadioButton::indicator:checked {
-                background:#80643f; border:1px solid #c7a265;
+            QWidget#settingsPage QPushButton[primary="true"]:pressed {
+                background:#211e1a; border-color:#c7a265;
+            }
+            QWidget#settingsPage QPushButton[primary="true"]:disabled {
+                background:#151b22; color:#68727c; border-color:#252d35;
+            }
+            QWidget#settingsPage QPushButton[primary="true"]:focus {
+                border-color:#e0bd72;
             }
         """)
         layout = QVBoxLayout(page)
@@ -5830,7 +6403,9 @@ class GuildGearCheckerQt(QMainWindow):
         self.points_enabled_check.toggled.connect(self._points_system_toggled)
         self.dkp_enabled_check.toggled.connect(self._dkp_mode_toggled)
         feature_layout.addWidget(self.points_enabled_check)
-        scope_row = QHBoxLayout()
+        scope_host = QWidget()
+        scope_row = QHBoxLayout(scope_host)
+        scope_row.setContentsMargins(0, 0, 0, 0)
         scope_row.setSpacing(8)
         scope_row.addWidget(QLabel(tr("raid_points.calculation_label")))
         self.raid_scope_all = QRadioButton(tr("raid_points.calculation_all"))
@@ -5848,7 +6423,8 @@ class GuildGearCheckerQt(QMainWindow):
         scope_row.addWidget(self.raid_scope_from, 0)
         scope_row.addWidget(self.raid_scope_start)
         scope_row.addStretch(1)
-        feature_layout.addLayout(scope_row)
+        feature_layout.addWidget(scope_host)
+        self.settings_raid_scope_controls = scope_host
         feature_layout.addWidget(self.dkp_enabled_check)
 
         # Local preference fields retain their existing shared save handler.
@@ -5894,7 +6470,7 @@ class GuildGearCheckerQt(QMainWindow):
         self.clm_path_edit = QLineEdit(str(self._suite_settings.get("clm_saved_variables_path") or ""))
         self.clm_path_edit.setReadOnly(True)
         path_row.addWidget(self.clm_path_edit, 1)
-        browse = QPushButton(tr("raid_clm_admin.browse"))
+        browse = QPushButton(tr("raid_clm_admin.clm_change_path"))
         browse.clicked.connect(self.choose_clm_path)
         path_row.addWidget(browse)
         clm_layout.addLayout(path_row)
@@ -5903,17 +6479,38 @@ class GuildGearCheckerQt(QMainWindow):
         roster_label.setMinimumWidth(100)
         roster_row.addWidget(roster_label)
         self.clm_roster_combo = QComboBox()
+        self.clm_roster_combo.currentIndexChanged.connect(
+            self._v2_clm_roster_changed)
         roster_row.addWidget(self.clm_roster_combo, 1)
         clm_layout.addLayout(roster_row)
+        self.clm_v2_all_button = QPushButton(tr("raid_clm_admin.clm_refresh_all"))
+        self.clm_v2_all_button.clicked.connect(self.refresh_all_from_clm)
+        clm_layout.addWidget(self.clm_v2_all_button)
         dkp_actions = QHBoxLayout()
+        self.clm_v2_characters_button = QPushButton(
+            tr("raid_clm_admin.clm_refresh_characters"))
+        self.clm_v2_characters_button.clicked.connect(self.refresh_characters_from_clm)
+        dkp_actions.addWidget(self.clm_v2_characters_button)
+        self.clm_v2_raids_button = QPushButton(tr("raid_clm_admin.clm_refresh_raids"))
+        self.clm_v2_raids_button.clicked.connect(self.refresh_raids_from_clm)
+        dkp_actions.addWidget(self.clm_v2_raids_button)
         refresh = QPushButton(tr("raid_clm_admin.refresh_dkp"))
         refresh.clicked.connect(self.refresh_dkp)
+        self.clm_refresh_button = refresh
         dkp_actions.addWidget(refresh)
+        v2_history = QPushButton(tr("dkp_history.tab"))
+        v2_history.clicked.connect(self.open_v2_dkp_history)
+        self.clm_v2_history_button = v2_history
         history_sync = QPushButton(tr("raid_clm_admin.sync_history"))
         history_sync.clicked.connect(self.sync_clm_raid_history)
-        dkp_actions.addWidget(history_sync)
+        self.clm_history_sync_button = history_sync
         dkp_actions.addStretch(1)
         clm_layout.addLayout(dkp_actions)
+        history_actions = QHBoxLayout()
+        history_actions.addWidget(v2_history)
+        history_actions.addWidget(history_sync)
+        history_actions.addStretch(1)
+        clm_layout.addLayout(history_actions)
         self.clm_status_label = QLabel(tr("raid_clm_admin.clm_not_refreshed"))
         style_status(self.clm_status_label)
         clm_layout.addWidget(self.clm_status_label)
@@ -5929,7 +6526,8 @@ class GuildGearCheckerQt(QMainWindow):
         points_layout.addLayout(stat_action)
         raid_points_action = QHBoxLayout()
         self.raid_points_only_rebuild_button = QPushButton(tr("raid_points.rebuild_only"))
-        self.raid_points_only_rebuild_button.clicked.connect(self.rebuild_raid_points)
+        self.raid_points_only_rebuild_button.clicked.connect(
+            self._rebuild_settings_raid_points)
         raid_points_action.addWidget(self.raid_points_only_rebuild_button)
         raid_points_action.addStretch(1)
         points_layout.addLayout(raid_points_action)
@@ -5937,27 +6535,10 @@ class GuildGearCheckerQt(QMainWindow):
         style_status(self.points_status_label)
         points_layout.addWidget(self.points_status_label)
 
-        migration = QFrame()
-        migration.setProperty("card", True)
-        mig_layout = QVBoxLayout(migration)
-        mig_layout.setContentsMargins(12, 8, 12, 8)
-        mig_layout.setSpacing(5)
-        mig_title = QLabel(tr("checker.qt_migration"))
-        mig_title.setStyleSheet("color:#c4b18a;font-weight:600;background:transparent;border:none;")
-        mig_layout.addWidget(mig_title)
-        info = QLabel(tr("checker.qt_migration_help"))
-        info.setObjectName("subtle")
-        info.setWordWrap(True)
-        mig_layout.addWidget(info)
-        legacy = QPushButton(tr("checker.launch_legacy"))
-        legacy.setMaximumWidth(230)
-        legacy.clicked.connect(self.launch_legacy_checker)
-        mig_layout.addWidget(legacy, 0, Qt.AlignmentFlag.AlignLeft)
-
         content.set_sections(
             [guild_card, feature_card, local_card],
             [self.clm_group, self.points_group],
-            [migration],
+            [],
         )
         scroll.setWidget(content)
         layout.addWidget(scroll, 1)
@@ -5965,7 +6546,35 @@ class GuildGearCheckerQt(QMainWindow):
 
     # ---------- Navigation / refresh ----------
     def switch_page(self, page: str, *, refresh: bool = True) -> None:
-        widget = self._pages.get(page)
+        if self.project_mode == "identity_v2":
+            if (page == "identity_v2_points"
+                    and self.identity_v2_store is not None
+                    and self.identity_v2_store.pointMode != POINT_MODE_RAID):
+                return
+            if page == "management":
+                page = ("identity_v2_character_data"
+                        if self._v2_management_tab == "characters"
+                        else "identity_v2_players")
+            v2_pages = {"rooster": "rooster", "identity_v2_roster": "rooster",
+                        "player_profile": "player_profile",
+                        "raid": "raid",
+                        "identity_v2_matrix": "raid",
+                        "identity_v2_points": "raid",
+                        "graveyard": "graveyard",
+                        "identity_v2_players": "identity_v2_players",
+                        "identity_v2_character_data": "identity_v2_character_data",
+                        "settings": "settings"}
+            if page not in v2_pages:
+                return
+            widget = self._pages[v2_pages[page]]
+            is_v2_management = page in ("identity_v2_players",
+                                        "identity_v2_character_data")
+            if is_v2_management:
+                self._v2_management_tab = (
+                    "characters" if page == "identity_v2_character_data" else "players")
+        else:
+            widget = self._pages.get(page)
+            is_v2_management = False
         if widget is None:
             return
         if (
@@ -5974,11 +6583,34 @@ class GuildGearCheckerQt(QMainWindow):
         ):
             self._flush_detail_autosave(refresh=False)
         self.stack.setCurrentWidget(widget)
+        self.v2_management_tabs.setVisible(is_v2_management)
+        for key, button in self._v2_management_buttons.items():
+            button.setChecked(is_v2_management and key == self._v2_management_tab)
         for key, button in self._nav_buttons.items():
             button.blockSignals(True)
-            button.setChecked(key == page)
+            button.setChecked(key == ("management" if is_v2_management else
+                                      "raid" if page in ("identity_v2_matrix",
+                                                         "identity_v2_points") else page))
             button.blockSignals(False)
         if not refresh:
+            return
+        if self.project_mode == "identity_v2":
+            if page in ("rooster", "identity_v2_roster"):
+                self._roster_cards_dirty = True
+                self._refresh_current_roster_view()
+            elif page == "raid":
+                self.raid_subtabs.setCurrentWidget(self.raids_page)
+                self.refresh_raids()
+            elif page == "settings":
+                self._sync_admin_controls()
+            elif page == "graveyard":
+                self.refresh_graveyard()
+            elif page == "identity_v2_matrix":
+                self.raid_subtabs.setCurrentWidget(self.attendance_page)
+                self.refresh_raid_matrix()
+            elif page == "identity_v2_points":
+                self.raid_subtabs.setCurrentWidget(self.point_history_page)
+                self._populate_point_history_subjects()
             return
         if page == "management":
             self.refresh_member_table(select_first=False)
@@ -5990,17 +6622,34 @@ class GuildGearCheckerQt(QMainWindow):
             self._refresh_current_raid_tab()
 
     def open_player_profile_for_member(self, member_id: str) -> bool:
+        if self.project_mode == "identity_v2":
+            store = self.identity_v2_store
+            member = next((item for item in store.members
+                           if item.memberId == member_id), None) if store else None
+            if member is None or member.playerId is None:
+                return False
+            return self.open_player_profile(
+                member.playerId, selected_member_id=member.memberId)
         member = self.model.find_by_id(str(member_id or ""))
         if member is None or not member.playerId:
             return False
         return self.open_player_profile(member.playerId)
 
-    def open_player_profile(self, player_id: str) -> bool:
-        """Open one active player by ID without name fallback or data refresh."""
+    def open_player_profile(
+            self, player_id: str, *, selected_member_id: str | None = None,
+    ) -> bool:
+        """Open one player by ID without name fallback or data refresh."""
         player_id = str(player_id or "").strip()
-        if not player_id or not self.model.player_is_active(player_id):
+        if not player_id:
             return False
-        profile = self._build_player_profile(player_id)
+        if self.project_mode == "identity_v2":
+            if (self.identity_v2_store is None or not any(
+                    player.playerId == player_id
+                    for player in self.identity_v2_store.players)):
+                return False
+        elif not self.model.player_is_active(player_id):
+            return False
+        profile = self._build_player_profile(player_id, selected_member_id)
         if profile is None:
             return False
         if self.stack.currentWidget() is not self.player_profile_page:
@@ -6020,6 +6669,21 @@ class GuildGearCheckerQt(QMainWindow):
     def _build_player_profile(
             self, player_id: str, selected_member_id: str | None = None,
     ) -> PlayerProfileViewModel | None:
+        if self.project_mode == "identity_v2":
+            from app.identity_v2_player_profile import build_v2_player_profile
+
+            store = self.identity_v2_store
+            if store is None or self._v2_attendance_adapter is None:
+                return None
+            return build_v2_player_profile(
+                store, player_id, project_path=self.identity_v2_project_path,
+                attendance_adapter=self._v2_attendance_adapter,
+                dkp_projection=self._v2_dkp_projection,
+                raid_points_projection=self._v2_raid_point_projection,
+                registry=self._reward_registry,
+                roster_by_id=self._v2_roster_by_id,
+                selected_member_id=selected_member_id,
+            )
         current_dkp = (
             self._clm_dkp_by_member_id
             if self._clm_refresh_service.cached_snapshot is not None else None
@@ -6104,9 +6768,12 @@ class GuildGearCheckerQt(QMainWindow):
             raid_count: int,
             raid_points: int | None, eternal_dkp: int | float,
             current_dkp: int | float | None, point_mode: str,
+            raid_days: int | None = None,
     ) -> None:
         labels["attendance"].setText(self._profile_attendance_text(attendance))
-        labels["raids"].setText(str(int(raid_count)))
+        labels["raids"].setText(
+            str(int(raid_count)) if raid_days is None else
+            f"{int(raid_count)} · {int(raid_days)} {tr('identity_v2_matrix.raid_days')}")
         if "points" in labels:
             labels["points"].setText(
                 self._profile_number(raid_points if point_mode == POINT_MODE_RAID else current_dkp)
@@ -6118,6 +6785,21 @@ class GuildGearCheckerQt(QMainWindow):
 
     def _refresh_profile_raid_list(self, character: object) -> None:
         """Show existing attendance and point projections for one member only."""
+        if self.project_mode == "identity_v2":
+            point_mode = self.identity_v2_store.pointMode
+            point_title = (tr("raid_points.title") if point_mode == POINT_MODE_RAID
+                           else tr("player_profile.dkp"))
+            rows = []
+            for date, name, status, points, raid_id in character.raid_rows:
+                if status not in ("present", "bench"):
+                    continue
+                status_text = (
+                    tr(f"raids.attendance_status_{status}")
+                )
+                rows.append((date, name, status_text,
+                             self._profile_number(points), raid_id))
+            self._populate_profile_raid_tables(rows, point_title, point_mode)
+            return
         member_id = str(getattr(character, "member_id", ""))
         attended_raid_ids = set(getattr(character, "attended_raid_ids", ()))
         point_mode = self.model.active_point_mode()
@@ -6164,6 +6846,9 @@ class GuildGearCheckerQt(QMainWindow):
                 tr(f"raids.attendance_status_{attendance.status}"), value, raid.id,
             ))
         rows.sort(key=lambda row: (row[0], row[4]), reverse=True)
+        self._populate_profile_raid_tables(rows, point_title, point_mode)
+
+    def _populate_profile_raid_tables(self, rows, point_title, point_mode) -> None:
         for page in self._profile_views:
             page.character_raid_table.setHorizontalHeaderLabels((
                 tr("common.date"), tr("common.name"), tr("common.status"), point_title,
@@ -6189,18 +6874,32 @@ class GuildGearCheckerQt(QMainWindow):
             self.player_profile_page.draft_page.set_profile_family(profile)
             self._render_profile_character(profile, refresh_options=True)
             return
-        point_mode = self.model.active_point_mode()
-        page.set_point_system(point_mode)
+        v2 = self.project_mode == "identity_v2"
+        point_mode = (self.identity_v2_store.pointMode if v2
+                      else self.model.active_point_mode())
+        page.set_point_system(point_mode, identity_v2=v2)
         heading_name = profile.profile_name or tr("player_profile.no_active_main")
         page.title.setText(tr("player_profile.title", name=heading_name))
         options: list[tuple[str, str]] = []
-        for label, player_id in active_player_options(self.model):
-            if self.model.active_main_for_player(player_id) is None:
-                label = tr("player_profile.no_main_option", player=label)
-            options.append((label, player_id))
+        if v2:
+            members = {member.memberId: member
+                       for member in self.identity_v2_store.members}
+            for player in self.identity_v2_store.players:
+                main = members.get(player.mainMemberId)
+                label = (main.name if main is not None else
+                         tr("player_profile.no_main_option", player=player.displayName))
+                options.append((label, player.playerId))
+            options.sort(key=lambda item: (item[0].casefold(), item[1]))
+        else:
+            for label, player_id in active_player_options(self.model):
+                if self.model.active_main_for_player(player_id) is None:
+                    label = tr("player_profile.no_main_option", player=label)
+                options.append((label, player_id))
         page.set_player_options(options, profile.player_id)
 
         page.player_metric_labels["player_rank"].setText(
+            (profile.player_rank_asset_id.replace("_", " ")
+             if profile.player_rank_asset_id else "–") if v2 else
             self._frame_stage_text(profile.frame_asset_id)
         )
         self._set_profile_metrics(
@@ -6208,9 +6907,11 @@ class GuildGearCheckerQt(QMainWindow):
             attendance=profile.attendance,
             raid_count=profile.raid_count,
             raid_points=profile.raid_points,
-            eternal_dkp=profile.eternal_dkp,
+            eternal_dkp=(profile.raid_points if v2 and point_mode == POINT_MODE_RAID
+                         else profile.eternal_dkp),
             current_dkp=profile.current_dkp,
             point_mode=point_mode,
+            raid_days=profile.raid_days if v2 else None,
         )
 
     def _render_profile_character(
@@ -6247,6 +6948,9 @@ class GuildGearCheckerQt(QMainWindow):
         character = profile.selected_character
         if character is None:
             self._clear_profile_character(page=page)
+            return
+        if self.project_mode == "identity_v2":
+            self._render_v2_profile_character(profile, character, page)
             return
         member = self.model.find_by_id(character.member_id)
         if member is None:
@@ -6300,6 +7004,72 @@ class GuildGearCheckerQt(QMainWindow):
             point_mode=self.model.active_point_mode(),
         )
 
+    def _render_v2_profile_character(self, profile, character, page) -> None:
+        store = self.identity_v2_store
+        member = next((item for item in store.members
+                       if item.memberId == character.member_id), None)
+        if member is None:
+            self._clear_profile_character(page=page)
+            return
+        page.character_name.setText(character.name)
+        race_text = race_display(character.race) if character.race else tr("common.not_set")
+        class_text = profile_class_display(character.class_name) or tr("common.not_set")
+        color = CLASS_COLORS.get(character.class_name, MUTED)
+        class_markup = f'<span style="color:{color};">{html.escape(class_text)}</span>'
+        if character.class_name:
+            icon_path = class_icon_path(character.class_name)
+            if icon_path.is_file():
+                source = html.escape(QUrl.fromLocalFile(str(icon_path)).toString(),
+                                     quote=True)
+                class_markup = (f'<img src="{source}" width="16" height="16"> '
+                                f'{class_markup}')
+        page.character_identity_line.setText(
+            f"{html.escape(race_text)} · {class_markup}")
+        page.character_identity_line.setToolTip(" · ".join((
+            raid_role_display(character.raid_role),
+            gear_status_display(character.gear_status),
+            raid_status_display(character.raid_status),
+        )))
+        page.character_spec.setText(character.spec or tr("common.not_set"))
+        page.character_type.setText(character_type_display(character.character_type))
+        page.character_life.setText(tr(f"life.{character.life_status}"))
+        page.character_rank.setText(
+            character.rank_asset_id.replace("_", " ")
+            if character.rank_asset_id else "–")
+        if isinstance(page, PlayerProfileDraftPage):
+            set_roster_status(page.character_life,
+                              "positive" if character.life_status == "active" else
+                              "warning" if character.life_status == "inactive" else
+                              "negative")
+            set_roster_status(page.character_type, "neutral")
+        self._set_external_rank_icon(
+            page.player_rank_icon, character.rank_path,
+            page.player_rank_icon.width())
+        if character.life_status == "dead":
+            template = self._v2_grave_inventory_by_id().get(member.graveTemplateId)
+            page.player_portrait.set_pixmap_source(
+                self._v2_grave_pixmap(member, template, (180, 240)))
+            page.player_reward_portrait.clear_reward_badge()
+            page.player_reward_portrait.clear_reward_frame()
+        else:
+            page.player_portrait.set_source(character.portrait_path)
+            page.player_portrait.set_contain_portrait(True)
+            main_item = self._v2_roster_by_id.get(profile.current_main_member_id)
+            page.player_reward_portrait.clear_reward_badge()
+            page.player_reward_portrait.set_reward_frame(
+                main_item.framePath if main_item is not None else None,
+                main_item.frameOpening if main_item is not None else None)
+        point_mode = store.pointMode
+        self._set_profile_metrics(
+            page.character_metric_labels,
+            attendance=character.attendance, raid_count=character.raid_count,
+            raid_points=character.raid_points,
+            eternal_dkp=(character.raid_points if point_mode == POINT_MODE_RAID
+                         else character.eternal_dkp),
+            current_dkp=character.current_dkp, point_mode=point_mode,
+            raid_days=character.raid_days,
+        )
+
     def _clear_profile_character(self, page=None) -> None:
         if page is None:
             for view in self._profile_views:
@@ -6349,6 +7119,11 @@ class GuildGearCheckerQt(QMainWindow):
         )
 
     def refresh_all(self, select_first: bool = False) -> None:
+        if self.project_mode == "identity_v2":
+            self.refresh_project_label()
+            if self.stack.currentWidget() is self._pages.get("graveyard"):
+                self.refresh_graveyard()
+            return
         self.refresh_project_label()
         self._sync_admin_controls()
         self.refresh_member_table(select_first=select_first)
@@ -6387,6 +7162,7 @@ class GuildGearCheckerQt(QMainWindow):
                     member.lastChecked or "–",
                     last_raid_dates.get(member.id, "–"),
                     assigned_main.name if assigned_main is not None else "–",
+                    tr("checker.armory_link"),
                 )
                 for column, value in enumerate(values):
                     item = (
@@ -6399,7 +7175,17 @@ class GuildGearCheckerQt(QMainWindow):
                         icon_path = class_icon_path(member.className)
                         if icon_path.is_file():
                             item.setIcon(QIcon(str(icon_path)))
+                    if column == 11:
+                        item.setForeground(QColor("#8fc7ff"))
+                        font = item.font()
+                        font.setUnderline(True)
+                        item.setFont(font)
+                        item.setToolTip(build_armory_url(
+                            member.name, self.model.region, self.model.realm, self.model.game_version,
+                        ))
                     if column in {8, 9, 10}:
+                        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    if column == 11:
                         item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                     self.member_table.setItem(row, column, item)
         finally:
@@ -6499,7 +7285,7 @@ class GuildGearCheckerQt(QMainWindow):
             return
         header = self.member_table.horizontalHeader()
         start_row, start_column = current.row(), header.visualIndex(current.column())
-        protected = {4, 8, 9, 10}
+        protected = {4, 8, 9, 10, 11}
         edits: list[tuple[Member, int, str]] = []
         for row_offset, values in enumerate(rows):
             table_row = start_row + row_offset
@@ -6679,8 +7465,13 @@ class GuildGearCheckerQt(QMainWindow):
         )
         player_total = None
         if active_main is not None and active_main.id == member.id:
+            family_member_ids = {
+                value.id for value in self.model.members
+                if value.playerId == member.playerId
+            }
             player_total = sum(
-                entry.total_points for entry in entries if entry.player_id == member.playerId
+                entry.total_points for entry in entries
+                if entry.member_id in family_member_ids
             )
         return character_total, player_total
 
@@ -6704,6 +7495,8 @@ class GuildGearCheckerQt(QMainWindow):
         player_button.setVisible(not eternal and player_total is not None)
 
     def _refresh_visible_point_details(self) -> None:
+        if self.project_mode == "identity_v2":
+            return
         member = self.model.find_by_id(self.selected_member_id or "")
         if member is not None and hasattr(self, "detail_character_points"):
             self._set_member_point_labels(
@@ -6735,9 +7528,14 @@ class GuildGearCheckerQt(QMainWindow):
             entries = self._point_entries()
             character_points: dict[str, int] = {}
             player_points: dict[str, int] = {}
+            member_by_id = {member.id: member for member in self.model.members}
             for entry in entries:
                 character_points[entry.member_id] = character_points.get(entry.member_id, 0) + entry.total_points
-                player_points[entry.player_id] = player_points.get(entry.player_id, 0) + entry.total_points
+                member = member_by_id.get(entry.member_id)
+                if member is not None and member.playerId:
+                    player_points[member.playerId] = (
+                        player_points.get(member.playerId, 0) + entry.total_points
+                    )
         active_main_ids = {
             player_id: main.id
             for player_id in {member.playerId for member in self.model.members if member.playerId}
@@ -6818,6 +7616,8 @@ class GuildGearCheckerQt(QMainWindow):
         )
 
     def _refresh_visible_reward_details(self) -> None:
+        if self.project_mode == "identity_v2":
+            return
         member = self.model.find_by_id(self.selected_member_id or "")
         if member is not None:
             self._set_member_reward_visuals(
@@ -6847,6 +7647,8 @@ class GuildGearCheckerQt(QMainWindow):
         return self._format_dkp_value(self._clm_dkp_by_member_id.get(member.id))
 
     def _refresh_visible_dkp_details(self) -> None:
+        if self.project_mode == "identity_v2":
+            return
         if hasattr(self, "detail_dkp_section"):
             self.detail_dkp_section.setVisible(False)
             member = self.model.find_by_id(self.selected_member_id or "")
@@ -6991,9 +7793,14 @@ class GuildGearCheckerQt(QMainWindow):
         if not was_loading:
             self._detail_discrete_changed()
 
-    def _detail_character_type_changed(self, _value: str) -> None:
+    def _detail_character_type_changed(self, value: str) -> None:
         member = self.model.find_by_id(self.selected_member_id or "")
         self._refresh_associated_main_combo(member)
+        if (
+            not self._detail_loading
+            and character_type_from_display(value) != "twink"
+        ):
+            self._detail_discrete_changed()
 
     def _refresh_associated_main_combo(self, member: Member | None) -> None:
         if not hasattr(self, "associated_main_combo"):
@@ -7189,6 +7996,12 @@ class GuildGearCheckerQt(QMainWindow):
         self._open_armory_for_id(self.selected_member_id or "")
 
     def _open_armory_for_id(self, member_id: str) -> None:
+        if self.project_mode == "identity_v2":
+            item = self._v2_roster_by_id.get(member_id)
+            if item is not None and item.armoryUrl:
+                webbrowser.open(item.armoryUrl)
+                self.set_status(tr("checker.armory_opened", name=item.name))
+            return
         member = self.model.find_by_id(member_id)
         if member is None:
             return
@@ -7461,11 +8274,7 @@ class GuildGearCheckerQt(QMainWindow):
 
     # ---------- roster ----------
     def _roster_zoom_min(self) -> int:
-        return (
-            ROSTER_DRAFT_ZOOM_MIN
-            if self._roster_presentation == "draft"
-            else ROSTER_CLASSIC_ZOOM_MIN
-        )
+        return ROSTER_DRAFT_ZOOM_MIN
 
     def _sync_roster_zoom_range(self) -> None:
         minimum = self._roster_zoom_min()
@@ -7514,7 +8323,22 @@ class GuildGearCheckerQt(QMainWindow):
         self._roster_list_dirty = True
         self._refresh_current_roster_view()
 
-    def _roster_groups(self) -> dict[str, list[Member]]:
+    def _roster_groups(self) -> dict[str, list]:
+        if self.project_mode == "identity_v2":
+            from app.identity_v2_roster import filter_sort_v2_roster
+
+            visible = filter_sort_v2_roster(
+                self._v2_roster_items,
+                query=self.roster_search_edit.text(),
+                class_name=self.v2_roster_class_filter.currentData(),
+                sort_key=str(self.v2_roster_sort.currentData() or "name"),
+            )
+            self._v2_roster_visible_ids = {item.memberId for item in visible}
+            groups = {role: [] for role in ROSTER_ROLE_ORDER}
+            for item in visible:
+                role = item.raidRole if item.raidRole in groups else "not_set"
+                groups[role].append(item)
+            return groups
         groups = group_roster_members(self.model.members)
         if self.roster_search_edit.text().strip():
             groups = {
@@ -7523,7 +8347,7 @@ class GuildGearCheckerQt(QMainWindow):
             }
         return groups
 
-    def _rebuild_roster_cards(self, groups: dict[str, list[Member]]) -> None:
+    def _rebuild_roster_cards(self, groups: dict[str, list]) -> None:
         while self.roster_layout.count():
             item = self.roster_layout.takeAt(0)
             widget = item.widget()
@@ -7588,13 +8412,36 @@ class GuildGearCheckerQt(QMainWindow):
                 grid = ResponsiveCardGrid(card_width, gap=gap)
                 cards: list[QWidget] = []
                 for member in members:
-                    rank_path = self._rank_path_for_member(member, 96)
-                    if draft:
-                        card = RosterDraftCard(
-                            self.model, member, self._roster_zoom_percent, rank_path,
-                        )
+                    if self.project_mode == "identity_v2":
+                        rank_path = member.rankPath
+                        role_label = character_type_display(member.role)
+                        kwargs = dict(member_id=member.memberId,
+                                      portrait_path=member.portraitPath,
+                                      role_label=role_label)
+                        card = (RosterDraftCard(
+                            None, member, self._roster_zoom_percent, rank_path, **kwargs)
+                            if draft else RosterCard(
+                                None, member, self._roster_zoom_percent,
+                                rank_path=rank_path, **kwargs))
+                        tooltip = self._v2_roster_tooltip(member)
+                        card.setToolTip(tooltip)
+                        card.portrait.setToolTip(tooltip)
+                        active_rank = (member.dkpRank
+                                       if member.activePointSystem == POINT_MODE_ETERNAL
+                                       else member.raidRank)
+                        rank_key = ("dkp_rank"
+                                    if member.activePointSystem == POINT_MODE_ETERNAL
+                                    else "raid_rank")
+                        card.rank_icon.setToolTip(
+                            f"{tr(f'identity_v2_views.{rank_key}')}: "
+                            f"{active_rank.replace('_', ' ') if active_rank else '–'}")
                     else:
-                        card = RosterCard(self.model, member, self._roster_zoom_percent, rank_path=rank_path)
+                        rank_path = self._rank_path_for_member(member, 96)
+                        card = (RosterDraftCard(
+                            self.model, member, self._roster_zoom_percent, rank_path)
+                            if draft else RosterCard(
+                                self.model, member, self._roster_zoom_percent,
+                                rank_path=rank_path))
                     card.clicked.connect(self._roster_card_clicked)
                     cards.append(card)
                     self._roster_cards.append(card)
@@ -7612,8 +8459,21 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_layout.addStretch(1)
         self._apply_roster_card_selection()
 
-    def _rebuild_roster_list(self, groups: dict[str, list[Member]]) -> None:
+    @staticmethod
+    def _v2_roster_tooltip(item) -> str:
+        return "\n".join((
+            item.name,
+            f"{tr('identity_v2_players.player_column')}: {item.playerName or '–'}",
+            " · ".join(value for value in (item.className, item.spec) if value) or "–",
+            f"{character_type_display(item.role)} · {raid_role_display(item.raidRole)}",
+            raid_status_display(item.raidStatus),
+        ))
+
+    def _rebuild_roster_list(self, groups: dict[str, list]) -> None:
         visible_members = [member for role in ROSTER_ROLE_ORDER for member in groups[role]]
+        if self.project_mode == "identity_v2":
+            self.v2_roster_page.set_roster_items(visible_members)
+            return
         self.roster_list.setSortingEnabled(False)
         self.roster_list.setRowCount(len(visible_members))
         # Beide DKP-Aggregationen sind reine Funktionen des aktuellen Modellzustands;
@@ -7646,22 +8506,49 @@ class GuildGearCheckerQt(QMainWindow):
                 current_dkp,
                 eternal_character,
                 eternal_player,
+                tr("checker.armory_link"),
             )
             for column, value in enumerate(values):
-                item = NumericSortItem(str(value)) if column >= 7 else QTableWidgetItem(str(value))
+                item = NumericSortItem(str(value)) if 7 <= column <= 9 else QTableWidgetItem(str(value))
                 item.setData(Qt.ItemDataRole.UserRole, member.id)
-                if column >= 7:
+                if 7 <= column <= 9:
                     item.setData(int(Qt.ItemDataRole.UserRole) + 1, float(value) if value != "—" else float("-inf"))
                 if column == 1 and member.className:
                     icon_path = class_icon_path(member.className)
                     if icon_path.is_file():
                         item.setIcon(QIcon(str(icon_path)))
                     item.setForeground(QColor(CLASS_COLORS.get(member.className, "#d0d0d0")))
+                if column == 10:
+                    item.setForeground(QColor("#8fc7ff"))
+                    font = item.font()
+                    font.setUnderline(True)
+                    item.setFont(font)
+                    item.setToolTip(build_armory_url(
+                        member.name, self.model.region, self.model.realm, self.model.game_version,
+                    ))
                 self.roster_list.setItem(row, column, item)
         self.roster_list.setSortingEnabled(True)
         self.roster_list.sortItems(self._roster_list_sort_column, self._roster_list_sort_order)
 
     def _refresh_current_roster_view(self) -> None:
+        if self.project_mode == "identity_v2":
+            if self._roster_view_mode == "list":
+                if self._roster_list_dirty:
+                    self._rebuild_roster_list(self._roster_groups())
+                    self._roster_list_dirty = False
+            elif self._roster_cards_dirty:
+                self._rebuild_roster_cards(self._roster_groups())
+                self._roster_cards_dirty = False
+            self.roster_content_stack.setCurrentWidget(
+                self.v2_roster_page if self._roster_view_mode == "list"
+                else self.roster_scroll)
+            selected = getattr(self, "roster_selected_member_id", None)
+            if selected in self._v2_roster_visible_ids:
+                self._show_roster_detail(selected)
+            else:
+                self.roster_detail_panel.hide()
+            self._schedule_roster_reflow()
+            return
         if self._roster_view_mode == "list":
             if self._roster_list_dirty:
                 self._rebuild_roster_list(self._roster_groups())
@@ -7684,10 +8571,18 @@ class GuildGearCheckerQt(QMainWindow):
         self._show_roster_detail(member_id)
 
     def _show_roster_detail(self, member_id: str) -> None:
+        if self.project_mode == "identity_v2":
+            self._show_v2_roster_detail(member_id)
+            return
         member = self.model.find_by_id(member_id)
         if member is None or member.lifeStatus != "active":
             return
+        self.roster_detail_notes.setReadOnly(False)
+        self.roster_detail_portrait.set_contain_portrait(False)
+        self.roster_armory_button.show()
         self.roster_selected_member_id = member.id
+        if hasattr(self, "roster_current_dkp"):
+            self.roster_current_dkp.setText(self._dkp_text_for_member(member))
         self._apply_roster_card_selection()
         self.roster_detail_name.setText(member.name)
         race_text = race_display(member.race) if member.race else tr("common.not_set")
@@ -7745,15 +8640,146 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_splitter.setSizes([max(520, total - 400), 400])
         self._schedule_roster_reflow()
 
+    def _v2_point_presentation(self):
+        from app.identity_v2_point_presentation import (
+            ActivePointPresentation, POINT_MODE_RAID,
+        )
+
+        store = self.identity_v2_store
+        return ActivePointPresentation(
+            store.pointMode if store is not None else POINT_MODE_RAID)
+
+    def _show_v2_roster_detail(self, member_id: str) -> None:
+        item = self._v2_roster_by_id.get(member_id)
+        if item is None:
+            return
+        self.roster_selected_member_id = member_id
+        self._apply_roster_card_selection()
+        self.roster_detail_name.setText(item.name)
+        race_text = race_display(item.race) if item.race else tr("common.not_set")
+        class_text = item.className or tr("common.not_set")
+        class_color = CLASS_COLORS.get(item.className, "#d0d0d0")
+        class_markup = (f'<span style="color:{class_color};font-weight:600;">'
+                        f'{html.escape(class_text)}</span>')
+        if item.className:
+            icon_path = class_icon_path(item.className)
+            if icon_path.is_file():
+                source = html.escape(QUrl.fromLocalFile(str(icon_path)).toString(),
+                                     quote=True)
+                class_markup = (f'<img src="{source}" width="16" height="16"> '
+                                f'{class_markup}')
+        parts = [html.escape(race_text), class_markup]
+        if item.spec:
+            parts.append(html.escape(item.spec))
+        self.roster_detail_class.setText(" · ".join(parts))
+        self.roster_detail_class.setToolTip(
+            f"{tr('gear.label')}: {gear_status_display(item.gearStatus)}")
+        self.roster_detail_life.setText(tr("life.active"))
+        self.roster_detail_raid.setText(raid_status_display(item.raidStatus))
+        if self._roster_uses_draft():
+            set_roster_status(self.roster_detail_life, "positive")
+            set_roster_status(self.roster_detail_raid,
+                              "positive" if item.raidStatus == "Bereit" else
+                              "negative" if item.raidStatus == "Nicht bereit" else "neutral")
+        else:
+            self.roster_detail_raid.setStyleSheet(
+                "background:#355f45;" if item.raidStatus == "Bereit" else
+                "background:#633b40;" if item.raidStatus == "Nicht bereit" else "")
+        self.roster_detail_portrait.set_source(item.portraitPath)
+        self.roster_detail_portrait.set_contain_portrait(True)
+        self.roster_reward_portrait.clear_reward_badge()
+        self.roster_reward_portrait.set_reward_frame(
+            item.framePath, item.frameOpening,
+        )
+        self._set_external_rank_icon(
+            self.roster_rank_icon, item.rankPath, 96)
+        self.roster_detail_type.setText(character_type_display(item.role))
+        self.roster_detail_role.setText(raid_role_display(item.raidRole))
+        rank_text = lambda value: value.replace("_", " ") if value else "–"
+        presentation = self._v2_point_presentation()
+        active_rank = presentation.rank(item.dkpRank, item.raidRank)
+        rank_key = "dkp_rank" if presentation.shows("dkp_rank") else "raid_rank"
+        self.roster_detail_rank.setText(
+            f"{tr(f'identity_v2_views.{rank_key}')}: {rank_text(active_rank)}")
+        self.roster_rank_icon.setToolTip(self.roster_detail_rank.text())
+        self.roster_detail_checked.setText(item.lastChecked or "–")
+        self.roster_detail_notes.setReadOnly(True)
+        self.roster_detail_notes.setPlainText(item.note or "")
+        dkp_mode = presentation.shows("available_dkp")
+        self.roster_points_title.setText(
+            tr("raid_clm_admin.eternal_dkp") if dkp_mode else tr("raid_points.title"))
+        point_rows = (
+            (self.roster_current_dkp, tr("raid_clm_admin.current_dkp"),
+             item.availableDkp, dkp_mode),
+            (self.roster_character_points,
+             tr("raid_clm_admin.eternal_character") if dkp_mode
+             else tr("raid_points.character_points"),
+             item.eternalDkp if dkp_mode else item.raidPoints, True),
+            (self.roster_player_points,
+             tr("raid_clm_admin.eternal_player") if dkp_mode
+             else tr("identity_v2_raid_points.eternal_player"),
+             item.playerEternalDkp if dkp_mode else item.playerRaidPoints,
+             bool(item.playerId)),
+            (self.roster_eternal_character_points,
+             tr("identity_v2_character_data.detail_eternal_raid_points"),
+             item.eternalRaidPoints, not dkp_mode),
+        )
+        for value, label_text, points, visible in point_rows:
+            label = self.roster_points_form.labelForField(value)
+            if label is not None:
+                label.setText(label_text)
+            value.setText(self._format_dkp_value(points))
+            self.roster_points_form.setRowVisible(value, visible)
+        self.roster_points_section.show()
+        self.roster_character_history.setVisible(
+            not dkp_mode and self._v2_raid_point_projection is not None)
+        self.roster_player_history.setVisible(
+            not dkp_mode and self._v2_raid_point_projection is not None
+            and bool(item.playerId))
+        self.roster_dkp_section.hide()
+        self.roster_armory_button.setEnabled(bool(item.armoryUrl))
+        self.roster_armory_button.setToolTip(item.armoryUrl or "")
+        self.roster_armory_button.show()
+        self.roster_profile_button.setEnabled(bool(item.playerId))
+        self.roster_profile_button.show()
+        self.roster_detail_panel.show()
+        total = max(900, self.roster_splitter.width())
+        self.roster_splitter.setSizes([max(520, total - 400), 400])
+        self._schedule_roster_reflow()
+
     def export_roster_png(self) -> None:
         path, _filter = QFileDialog.getSaveFileName(self, tr("roster.export_png"), "Roster.png", "PNG (*.png)")
         if not path:
             return
         try:
-            summary = render_roster_png(self.model, Path(path))
+            target = Path(path if Path(path).suffix else path + ".png")
+            summary = (self._render_v2_roster_png(target)
+                       if self.project_mode == "identity_v2"
+                       else render_roster_png(self.model, target))
             self.set_status(tr("roster.export_png_done", width=summary["size"][0], height=summary["size"][1]))
         except Exception as exc:
             QMessageBox.critical(self, APP_NAME, str(exc))
+
+    def _render_v2_roster_png(self, target: Path) -> dict:
+        """Render the already shared V2 Qt gallery with its current filters."""
+        if self.identity_v2_store is None or target.suffix.casefold() != ".png":
+            raise ValueError("Für den V2-Rosterexport ist ein PNG-Ziel nötig.")
+        self._rebuild_roster_cards(self._roster_groups())
+        self._roster_cards_dirty = False
+        width = self.roster_scroll.viewport().width()
+        if width < 300:
+            width = 1000
+        self.roster_content.resize(width, max(1, self.roster_content.sizeHint().height()))
+        self.roster_layout.activate()
+        height = max(1, self.roster_layout.sizeHint().height())
+        self.roster_content.resize(width, height)
+        self.roster_layout.activate()
+        picture = QPixmap(width, height)
+        picture.fill(QColor("#101419"))
+        self.roster_content.render(picture)
+        if not picture.save(str(target), "PNG"):
+            raise OSError(f"Roster-PNG konnte nicht gespeichert werden: {target}")
+        return {"size": (width, height)}
 
     # ---------- graveyard ----------
     def _schedule_graveyard_zoom(self, value: int) -> None:
@@ -7776,6 +8802,10 @@ class GuildGearCheckerQt(QMainWindow):
         )
 
     def refresh_graveyard(self) -> None:
+        if self.project_mode == "identity_v2":
+            self._refresh_v2_graveyard()
+            return
+        self.grave_view.set_collective_entries(())
         dead = [member for member in self.model.members if member.lifeStatus == "dead"]
         dead.sort(key=lambda m: (m.deathDate or "", m.name.casefold()), reverse=True)
         inventory = None
@@ -7801,6 +8831,155 @@ class GuildGearCheckerQt(QMainWindow):
             summary=summary,
             empty_text=tr("checker.graveyard_empty"),
         )
+
+    def _v2_grave_inventory_by_id(self) -> dict[str, object]:
+        from app.gravestone_templates import load_gravestone_inventory
+
+        if not hasattr(self, "_v2_grave_inventory"):
+            root = gravestone_template_folder()
+            try:
+                self._v2_grave_inventory = load_gravestone_inventory(
+                    root, root / "gravestones_manifest.json")
+            except (OSError, TypeError, ValueError):
+                self._v2_grave_inventory = None
+        inventory = self._v2_grave_inventory
+        return inventory.by_id() if inventory is not None else {}
+
+    def _repair_v2_individual_graves(self, store):
+        """Upgrade old V2 graves in memory; the project file stays untouched."""
+        from app.identity_v2_graveyard import (
+            GravestoneUnavailableError, repair_missing_individual_gravestones,
+        )
+
+        missing = sum(member.lifeStatus == "dead"
+                      and member.burialType == "individual"
+                      and member.graveTemplateId is None
+                      for member in store.members)
+        if not missing:
+            return store, 0
+        try:
+            repaired = repair_missing_individual_gravestones(
+                store, tuple(self._v2_grave_inventory_by_id().values()))
+        except (OSError, ValueError) as exc:
+            detail = (tr("identity_v2_character_data.no_free_gravestone")
+                      if isinstance(exc, GravestoneUnavailableError) else str(exc))
+            QMessageBox.warning(self, APP_NAME, tr(
+                "identity_v2_graveyard.repair_failed", error=detail))
+            return store, 0
+        return repaired, missing
+
+    def _v2_grave_portrait(self, member_id: str) -> tuple[Path | None, bool]:
+        from app.project_storage import member_portrait_path, project_paths
+
+        project = self.identity_v2_project_path
+        if project is not None:
+            try:
+                candidates = (
+                    member_portrait_path(project, member_id),
+                    project_paths(project).history / f"{member_id}.png",
+                )
+                for candidate in candidates:
+                    if candidate.is_file():
+                        return candidate, True
+            except ValueError:
+                pass
+        placeholder = app_base_dir() / "assets" / "graveyard" / "portrait_placeholder.png"
+        return (placeholder if placeholder.is_file() else None), False
+
+    def _v2_grave_pixmap(self, member, template, size: tuple[int, int]) -> QPixmap:
+        from app.identity_v2_graveyard import gravestone_visual_fields
+
+        portrait_path, _has_portrait = self._v2_grave_portrait(member.memberId)
+        template_path = template.path if template is not None else gravestone_placeholder_path()
+        key = (
+            member.memberId, member.name, member.className, member.deathDate,
+            member.graveTemplateId, member.portraitOffsetX, member.portraitOffsetY,
+            member.portraitZoom, member.textOffsetX, member.textOffsetY,
+            member.textScale, self._image_signature(template_path),
+            self._image_signature(portrait_path), size, get_language(),
+        )
+        cached = self._graveyard_card_cache.get(key)
+        if cached is not None:
+            return cached
+        stale = [old for old in self._graveyard_card_cache
+                 if old[0] == member.memberId and old != key]
+        for old in stale:
+            self._graveyard_card_cache.pop(old, None)
+        frame = self._cached_graveyard_template(template, size)
+        visual_member = SimpleNamespace(**gravestone_visual_fields(member))
+        image = render_gravestone_card(
+            visual_member, frame, portrait_path, size,
+            text_safe_area_master=(template.default_text_safe_area
+                                   if template is not None else None),
+        )
+        pixmap = pil_to_pixmap(image)
+        self._graveyard_card_cache[key] = pixmap
+        self._trim_image_cache(self._graveyard_card_cache, 128)
+        return pixmap
+
+    def _refresh_v2_graveyard(self) -> None:
+        from app.identity_v2_graveyard import graveyard_entries
+
+        self._refresh_v2_external_project()
+        store = self.identity_v2_store
+        if store is None:
+            return
+        individual, collective = graveyard_entries(store)
+        self.v2_grave_entries = (individual, collective)
+        members = {member.memberId: member for member in store.members}
+        templates = self._v2_grave_inventory_by_id()
+        cards = [
+            (entry.memberId, self._v2_grave_pixmap(
+                members[entry.memberId], templates.get(entry.graveTemplateId),
+                GRAVESTONE_CARD_SIZE))
+            for entry in individual
+        ]
+        self.grave_view.set_collective_entries(collective)
+        self.grave_canvas.set_scene(
+            cards, zoom_percent=self._graveyard_zoom_percent,
+            summary=tr("identity_v2_graveyard.summary",
+                       individual=len(individual), collective=len(collective)),
+            empty_text=tr("identity_v2_graveyard.no_individual"),
+        )
+
+    @staticmethod
+    def _v2_file_signature(path: Path | None) -> tuple[int, int] | None:
+        if path is None:
+            return None
+        try:
+            stat = path.stat()
+        except OSError:
+            return None
+        return int(stat.st_mtime_ns), int(stat.st_size)
+
+    def _refresh_v2_external_project(self) -> None:
+        """Read a newer on-disk V2 save only when no local edits can be lost."""
+        path = self.identity_v2_project_path
+        signature = self._v2_file_signature(path)
+        if (path is None or self.identity_v2_dirty or signature is None
+                or signature == self._v2_project_file_signature):
+            return
+        from app.identity_v2_storage import load_identity_v2
+        from app.identity_v2_views import IdentityV2ViewData
+
+        try:
+            store = load_identity_v2(path)
+        except (OSError, ValueError) as exc:
+            self.set_status(tr("identity_v2_graveyard.external_reload_failed", error=exc))
+            return
+        store, repaired_count = self._repair_v2_individual_graves(store)
+        view_data = IdentityV2ViewData.from_store(store)
+        self.identity_v2_store = store
+        self.v2_raid_page.set_view_data(view_data)
+        self.v2_players_page.set_store(store)
+        self.v2_character_data_page.set_store(store)
+        self._set_v2_attendance_store(store)
+        self._v2_project_file_signature = signature
+        self.identity_v2_dirty = bool(repaired_count)
+        self.refresh_project_label()
+        if repaired_count:
+            self.set_status(tr(
+                "identity_v2_graveyard.repair_applied", count=repaired_count))
 
     @staticmethod
     def _image_signature(path: Path | None) -> tuple[str, int, int] | None:
@@ -7873,7 +9052,7 @@ class GuildGearCheckerQt(QMainWindow):
 
     def _grave_pixmap_for_member(self, member: Member, template,
                                  size: tuple[int, int] = GRAVESTONE_CARD_SIZE) -> QPixmap:
-        from PIL import Image, ImageDraw
+        from PIL import Image
         portrait = graveyard_member_portrait_path(self.model, member) if template is not None else None
         cache_key = self._graveyard_card_key(member, template, portrait, size)
         pixmap = self._graveyard_card_cache.get(cache_key)
@@ -7897,24 +9076,6 @@ class GuildGearCheckerQt(QMainWindow):
             except Exception:
                 frame = Image.new("RGBA", size, (0, 0, 0, 0))
         image = render_gravestone_card(member, frame, portrait, size)
-        if template is None:
-            scale_x = size[0] / max(1, GRAVESTONE_CARD_SIZE[0])
-            scale_y = size[1] / max(1, GRAVESTONE_CARD_SIZE[1])
-            draw = ImageDraw.Draw(image)
-            left = round(12 * scale_x)
-            top = round(112 * scale_y)
-            right = size[0] - left
-            bottom = round(164 * scale_y)
-            draw.rounded_rectangle(
-                (left, top, right, bottom),
-                radius=max(4, round(8 * min(scale_x, scale_y))),
-                fill="#241d1dcc", outline="#7b625c",
-            )
-            draw.multiline_text(
-                (size[0] // 2, round(138 * scale_y)),
-                tr("graveyard.not_available_card"),
-                anchor="mm", align="center", fill="#e2d0c9",
-            )
         pixmap = pil_to_pixmap(image)
         self._graveyard_card_cache[cache_key] = pixmap
         self._trim_image_cache(self._graveyard_card_cache, 128)
@@ -8196,14 +9357,35 @@ class GuildGearCheckerQt(QMainWindow):
             return None
         item = self.raid_table.item(rows[0].row(), 0)
         raid_id = item.data(Qt.ItemDataRole.UserRole) if item else None
+        if self.project_mode == "identity_v2":
+            from app.identity_v2_raid_ui import raid_view
+
+            raid = next((value for value in self.identity_v2_store.raids
+                         if value.raidId == raid_id), None) if raid_id else None
+            return raid_view(raid) if raid is not None else None
         return self.model.find_raid_by_id(str(raid_id)) if raid_id else None
+
+    def _select_raid_row(self, raid_id: str) -> bool:
+        for row in range(self.raid_table.rowCount()):
+            item = self.raid_table.item(row, 0)
+            if item is not None and item.data(Qt.ItemDataRole.UserRole) == raid_id:
+                self.raid_table.selectRow(row)
+                self.raid_table.scrollToItem(item)
+                return True
+        return False
 
     def _raid_table_clicked(self, row: int, column: int) -> None:
         if column != 5:
             return
+        if self.project_mode == "identity_v2":
+            item = self.raid_table.item(row, 5)
+            url = item.data(Qt.ItemDataRole.UserRole) if item else None
+            if url:
+                webbrowser.open_new_tab(url)
+            return
         item = self.raid_table.item(row, 0)
         raid_id = str(item.data(Qt.ItemDataRole.UserRole) or "") if item else ""
-        raid = self.model.find_raid_by_id(raid_id)
+        raid = self._selected_raid() if self.project_mode == "identity_v2" else self.model.find_raid_by_id(raid_id)
         if raid is not None and raid.warcraftLogsUrl:
             webbrowser.open_new_tab(raid.warcraftLogsUrl)
 
@@ -8305,6 +9487,32 @@ class GuildGearCheckerQt(QMainWindow):
     def _populate_point_history_subjects(self, *, force: bool = True) -> None:
         if not hasattr(self, "point_history_subject"):
             return
+        if self.project_mode == "identity_v2":
+            projection = self._v2_raid_point_projection
+            current = self.point_history_subject.currentData()
+            mode = str(self.point_history_mode.currentData() or "player")
+            member_ids = set(projection.by_member) if projection is not None else set()
+            if mode == "player":
+                options = [(player.displayName, player.playerId)
+                           for player in self.identity_v2_store.players
+                           if any(member_id in member_ids for member_id in
+                                  projection.members_by_player.get(player.playerId, ()))
+                           ] if self.identity_v2_store is not None and projection is not None else []
+            else:
+                options = [(member.name, member.memberId)
+                           for member in self.identity_v2_store.members
+                           if member.memberId in member_ids
+                           ] if self.identity_v2_store is not None else []
+            options.sort(key=lambda item: (item[0].casefold(), item[1]))
+            blocked = self.point_history_subject.blockSignals(True)
+            self.point_history_subject.clear()
+            for label, identifier in options:
+                self.point_history_subject.addItem(label, identifier)
+            index = self.point_history_subject.findData(current)
+            self.point_history_subject.setCurrentIndex(index if index >= 0 else 0)
+            self.point_history_subject.blockSignals(blocked)
+            self.refresh_point_history()
+            return
         if not force and not self._raid_view_dirty["history"]:
             return
         current = self.point_history_subject.currentData()
@@ -8346,6 +9554,42 @@ class GuildGearCheckerQt(QMainWindow):
             return
         current = self.dkp_history_subject.currentData()
         mode = str(self.dkp_history_mode.currentData() or "player")
+        if self.project_mode == "identity_v2":
+            store = self.identity_v2_store
+            if store is None or store.pointMode != POINT_MODE_ETERNAL:
+                self.dkp_history_subject.clear()
+                self.dkp_history_table.setRowCount(0)
+                return
+            members = {member.memberId: member for member in store.members}
+            if mode == "player":
+                players = {player.playerId: player for player in store.players}
+                player_ids = {
+                    members[record.memberId].playerId
+                    for record in store.eternalDkpRecords
+                    if record.memberId in members
+                    and members[record.memberId].playerId
+                }
+                options = [
+                    (players[player_id].displayName, player_id)
+                    for player_id in player_ids if player_id in players
+                ]
+            else:
+                member_ids = {record.memberId for record in store.eternalDkpRecords}
+                options = [(members[member_id].name, member_id)
+                           for member_id in member_ids if member_id in members]
+            options.sort(key=lambda item: (item[0].casefold(), item[1]))
+            self.dkp_history_subject.blockSignals(True)
+            try:
+                self.dkp_history_subject.clear()
+                for label, identifier in options:
+                    self.dkp_history_subject.addItem(label, identifier)
+                index = self.dkp_history_subject.findData(current)
+                if index >= 0:
+                    self.dkp_history_subject.setCurrentIndex(index)
+            finally:
+                self.dkp_history_subject.blockSignals(False)
+            self.refresh_dkp_history(force=force)
+            return
         records = self.model.eternal_dkp.records
         members = {member.id: member for member in self.model.members}
         if mode == "player":
@@ -8376,6 +9620,18 @@ class GuildGearCheckerQt(QMainWindow):
         self.refresh_dkp_history(force=force)
 
     def _matrix_subject_options(self, mode: str) -> list[tuple[str, str]]:
+        if self.project_mode == "identity_v2" and self._v2_attendance_adapter is not None:
+            adapter = self._v2_attendance_adapter
+            if mode == "player":
+                options = [(player.displayName, player.playerId)
+                           for player in adapter.store.players
+                           if player.playerId in adapter.active_players
+                           and player.playerId in adapter.first_player]
+            else:
+                options = [(member.name, member.memberId)
+                           for member in adapter.store.members
+                           if member.memberId in adapter.first_member]
+            return sorted(options, key=lambda item: (item[0].casefold(), item[1]))
         if mode == "player":
             players = {player.playerId: player for player in self.model.players}
             player_ids = {
@@ -8410,6 +9666,8 @@ class GuildGearCheckerQt(QMainWindow):
 
     def _matrix_view_mode_changed(self) -> None:
         mode = self._raid_view_mode("matrix")
+        if self.project_mode == "identity_v2":
+            self._v2_matrix_level = mode
         self.matrix_subject_label.setText(
             tr("raids.player_filter") if mode == "player" else tr("raids.character_filter")
         )
@@ -8422,6 +9680,18 @@ class GuildGearCheckerQt(QMainWindow):
         # A filter from the other view must never remain active invisibly.
         self._populate_matrix_subjects(reset=True)
         self._refresh_attendance_immediately()
+
+    def _v2_matrix_grouping_changed(self, button) -> None:
+        if self.project_mode != "identity_v2":
+            return
+        self._v2_matrix_grouping = str(button.property("v2Grouping"))
+        self.refresh_raid_matrix()
+
+    def _v2_matrix_colors_changed(self, button) -> None:
+        if self.project_mode != "identity_v2":
+            return
+        self._v2_matrix_colors = str(button.property("v2Colors"))
+        self._repaint_v2_matrix_colors()
 
     def _refresh_attendance_combined(self) -> None:
         self.refresh_raid_matrix()
@@ -8450,26 +9720,47 @@ class GuildGearCheckerQt(QMainWindow):
     def refresh_point_history(self, *, force: bool = True) -> None:
         if not hasattr(self, "point_history_table"):
             return
+        if self.project_mode == "identity_v2":
+            projection = self._v2_raid_point_projection
+            mode = str(self.point_history_mode.currentData() or "player")
+            subject_id = str(self.point_history_subject.currentData() or "")
+            entries = (projection.history_for_player(subject_id) if mode == "player"
+                       else projection.history_for_member(subject_id)) if (
+                           projection is not None and subject_id) else ()
+            self._populate_point_history_table(entries, mode)
+            return
         if not force and not self._raid_view_dirty["history"]:
             return
         mode = str(self.point_history_mode.currentData() or "player")
         subject_id = str(self.point_history_subject.currentData() or "")
+        family_member_ids = {
+            member.id for member in self.model.members
+            if member.playerId == subject_id
+        } if mode == "player" and subject_id else set()
         entries = [
             entry for entry in self._point_entries()
             if subject_id and (
-                entry.player_id == subject_id if mode == "player"
+                entry.member_id in family_member_ids if mode == "player"
                 else entry.member_id == subject_id
             )
         ]
-        entries.sort(key=lambda entry: (entry.date, entry.raid_id), reverse=True)
+        self._populate_point_history_table(entries, mode)
+        self._raid_view_dirty["history"] = False
+
+    def _populate_point_history_table(self, entries, mode: str) -> None:
+        entries = sorted(entries, key=lambda entry: (entry.date, entry.raid_id),
+                         reverse=True)
         self.point_history_table.setColumnHidden(2, mode != "player")
         self.point_history_table.setUpdatesEnabled(False)
         try:
             self.point_history_table.setRowCount(len(entries))
             for row, entry in enumerate(entries):
                 values = (
-                    entry.date, entry.raid_name, entry.character_name,
-                    tr(f"raids.attendance_status_{entry.attendance_status}"),
+                    entry.date or "–",
+                    (tr("identity_v2_raid_points.special") if entry.entry_kind == "special"
+                     else entry.raid_name), entry.character_name,
+                    (tr("identity_v2_raid_points.special") if entry.entry_kind == "special"
+                     else tr(f"raids.attendance_status_{entry.attendance_status}")),
                     entry.base_points,
                     f"{entry.adjustment:+d}" if entry.adjustment else "0",
                     entry.reason or "–", entry.total_points,
@@ -8480,12 +9771,15 @@ class GuildGearCheckerQt(QMainWindow):
                     self.point_history_table.setItem(row, column, item)
         finally:
             self.point_history_table.setUpdatesEnabled(True)
-        self._raid_view_dirty["history"] = False
 
     def _open_history_raid(self, row: int) -> None:
         item = self.point_history_table.item(row, 0)
         raid_id = str(item.data(Qt.ItemDataRole.UserRole) or "") if item else ""
         if not raid_id:
+            return
+        if self.project_mode == "identity_v2":
+            self.switch_page("raid")
+            self._select_raid_row(raid_id)
             return
         self.raid_subtabs.setCurrentIndex(0)
         for raid_row in range(self.raid_table.rowCount()):
@@ -8495,7 +9789,80 @@ class GuildGearCheckerQt(QMainWindow):
                 self.raid_table.scrollToItem(raid_item)
                 return
 
+    def open_v2_dkp_history(self) -> None:
+        store = self.identity_v2_store
+        if (self.project_mode != "identity_v2" or store is None
+                or store.pointMode != POINT_MODE_ETERNAL):
+            return
+        self.switch_page("identity_v2_matrix", refresh=False)
+        self.raid_subtabs.setCurrentWidget(self.dkp_history_page)
+        self._populate_dkp_history_subjects()
+
+    def _refresh_v2_dkp_history(self) -> None:
+        store = self.identity_v2_store
+        table = self.dkp_history_table
+        if store is None or store.pointMode != POINT_MODE_ETERNAL:
+            table.setRowCount(0)
+            return
+        members = {member.memberId: member for member in store.members}
+        raids = {raid.clmRaidId: raid for raid in store.raids if raid.clmRaidId}
+        mode = str(self.dkp_history_mode.currentData() or "player")
+        subject_id = str(self.dkp_history_subject.currentData() or "")
+        records = [record for record in store.eternalDkpRecords
+                   if subject_id and record.memberId in members
+                   and (record.memberId == subject_id if mode == "character"
+                        else members[record.memberId].playerId == subject_id)]
+        records.sort(key=lambda record: (
+            record.occurredAt, record.eventId, record.recordId), reverse=True)
+        header = table.horizontalHeader()
+        sort_column = header.sortIndicatorSection()
+        sort_order = header.sortIndicatorOrder()
+        table.setSortingEnabled(False)
+        table.setUpdatesEnabled(False)
+        try:
+            table.setRowCount(len(records))
+            for row, record in enumerate(records):
+                member = members[record.memberId]
+                raid = raids.get(record.clmRaidId)
+                source = (f"{raid.date} {raid.name}" if raid is not None
+                          else tr("dkp_history.clm_source", id=record.clmRaidId)
+                          if record.clmRaidId else "–")
+                occurred = record.occurredAt.replace("T", " ")[:16] or "–"
+                try:
+                    timestamp = datetime.fromisoformat(
+                        record.occurredAt.replace("Z", "+00:00")).timestamp()
+                except ValueError:
+                    timestamp = 0
+                change = (("+" if record.value >= 0 else "")
+                          + self._format_dkp_value(record.value))
+                values = (occurred, source, member.name, record.eventType,
+                          change, record.description or "–")
+                for column, value in enumerate(values):
+                    item = (NumericSortItem(str(value)) if column in (0, 4)
+                            else QTableWidgetItem(str(value)))
+                    if column == 0:
+                        item.setData(int(Qt.ItemDataRole.UserRole) + 1, timestamp)
+                    elif column == 4:
+                        item.setData(int(Qt.ItemDataRole.UserRole) + 1, record.value)
+                    elif column == 2:
+                        item.setData(int(Qt.ItemDataRole.UserRole) + 2,
+                                     record.memberId)
+                        item.setToolTip(record.memberId)
+                        if member.className in CLASS_COLORS:
+                            item.setForeground(QColor(CLASS_COLORS[member.className]))
+                    item.setData(Qt.ItemDataRole.UserRole,
+                                 raid.raidId if raid is not None else "")
+                    table.setItem(row, column, item)
+        finally:
+            table.setUpdatesEnabled(True)
+            table.setSortingEnabled(True)
+        table.sortItems(sort_column, sort_order)
+        self._raid_view_dirty["dkp_history"] = False
+
     def refresh_dkp_history(self, *, force: bool = True) -> None:
+        if self.project_mode == "identity_v2":
+            self._refresh_v2_dkp_history()
+            return
         if not force and not self._raid_view_dirty["dkp_history"]:
             return
         mode = str(self.dkp_history_mode.currentData() or "player")
@@ -8562,6 +9929,10 @@ class GuildGearCheckerQt(QMainWindow):
         raid_id = str(item.data(Qt.ItemDataRole.UserRole) or "") if item else ""
         if not raid_id:
             return
+        if self.project_mode == "identity_v2":
+            self.switch_page("raid")
+            self._select_raid_row(raid_id)
+            return
         self.raid_subtabs.setCurrentWidget(self.raids_page)
         for raid_row in range(self.raid_table.rowCount()):
             raid_item = self.raid_table.item(raid_row, 0)
@@ -8571,6 +9942,9 @@ class GuildGearCheckerQt(QMainWindow):
                 return
 
     def open_point_history_for_member(self, member_id: str) -> None:
+        if self.project_mode == "identity_v2":
+            self._open_v2_point_history("character", member_id)
+            return
         if not self.model.raid_points.enabled or not member_id:
             return
         self.switch_page("raid")
@@ -8583,6 +9957,9 @@ class GuildGearCheckerQt(QMainWindow):
         self.raid_subtabs.setCurrentWidget(self.point_history_page)
 
     def open_point_history_for_player(self, player_id: str) -> None:
+        if self.project_mode == "identity_v2":
+            self._open_v2_point_history("player", player_id)
+            return
         if not self.model.raid_points.enabled or not player_id:
             return
         self.switch_page("raid")
@@ -8618,7 +9995,18 @@ class GuildGearCheckerQt(QMainWindow):
     def refresh_raids(self, *, force: bool = True) -> None:
         if not force and not self._raid_view_dirty["raids"]:
             return
-        self._sync_points_ui_visibility()
+        if self.project_mode == "identity_v2":
+            from app.identity_v2_raid_ui import raid_view
+
+            self._sync_v2_point_presentation()
+            attendance_by_raid: dict[str, dict[str, object]] = {}
+            for entry in self.identity_v2_store.attendance:
+                attendance_by_raid.setdefault(entry.raidId, {})[entry.memberId] = entry
+            raids = (raid_view(raid) for raid in self.identity_v2_store.raids)
+        else:
+            self._sync_points_ui_visibility()
+            attendance_by_raid = self.model.attendance_lookup()
+            raids = iter(self.model.raids)
         selected = self._selected_raid()
         selected_id = selected.id if selected else None
         columns = ("date", "type", "name", "participants", "status", "logs")
@@ -8628,8 +10016,7 @@ class GuildGearCheckerQt(QMainWindow):
         # gesamte Attendance-Liste pro Raid. Fachlich wird hier ausschliesslich
         # die Teilnehmerzahl verwendet; pro Raid und Spieler existiert genau ein
         # Eintrag (attendance_records() lehnt duplicate_player ab).
-        attendance_by_raid = self.model.attendance_lookup()
-        for raid in self.model.raids:
+        for raid in raids:
             attendance = attendance_by_raid.get(raid.id, {})
             status_text = (
                 tr("raids.status_recorded") if raid.status == "recorded"
@@ -8693,6 +10080,9 @@ class GuildGearCheckerQt(QMainWindow):
 
     def refresh_raid_participants(self) -> None:
         if not hasattr(self, "raid_participants_table"):
+            return
+        if self.project_mode == "identity_v2":
+            self._refresh_v2_raid_participants()
             return
         raid = self._selected_raid()
         entries = sorted(
@@ -8774,6 +10164,75 @@ class GuildGearCheckerQt(QMainWindow):
         self.raid_points_button.setEnabled(bool(entries))
         self._update_selected_raid_header(len(entries))
 
+    def _refresh_v2_raid_participants(self) -> None:
+        store = self.identity_v2_store
+        raid = self._selected_raid()
+        members = {member.memberId: member for member in store.members}
+        players = {player.playerId: player for player in store.players}
+        entries = ([entry for entry in store.attendance if entry.raidId == raid.id]
+                   if raid is not None else [])
+        entries.sort(key=lambda entry: (
+            (players[entry.playerId].displayName.casefold()
+             if entry.playerId in players else ""),
+            members[entry.memberId].name.casefold(), entry.memberId))
+        raid_mode = store.pointMode == POINT_MODE_RAID
+        self.raid_participants_table.setSortingEnabled(False)
+        self.raid_participants_table.setColumnCount(7 if raid_mode else 6)
+        headers = [tr("raids.player"), tr("raids.character"),
+                   tr("raids.type"), tr("common.status")]
+        headers.extend((tr("raid_points.base"), tr("raid_points.adjustment"),
+                        tr("raid_points.total")) if raid_mode else
+                       (tr("raid_clm_admin.eternal_dkp"),
+                        tr("raid_clm_admin.bench_share")))
+        self.raid_participants_table.setHorizontalHeaderLabels(headers)
+        point_entries = ({item.attendance_id: item
+                          for item in self._v2_raid_point_projection.history
+                          if item.entry_kind == "attendance"}
+                         if self._v2_raid_point_projection is not None else {})
+        source_raid = next((item for item in store.raids
+                            if raid is not None and item.raidId == raid.id), None)
+        records_by_member: dict[str, list] = {}
+        if not raid_mode and source_raid is not None and source_raid.clmRaidId:
+            for record in store.eternalDkpRecords:
+                if record.clmRaidId == source_raid.clmRaidId:
+                    records_by_member.setdefault(record.memberId, []).append(record)
+        self.raid_participants_table.setRowCount(len(entries))
+        for row, entry in enumerate(entries):
+            member = members[entry.memberId]
+            player = players.get(entry.playerId)
+            values = [player.displayName if player else "–", member.name,
+                      tr(f"raids.attendance_type_{entry.attendanceType}"),
+                      tr(f"raids.attendance_status_{entry.status}")]
+            if raid_mode:
+                points = point_entries.get(entry.attendanceId)
+                values.extend((points.base_points if points else "–",
+                               f"{points.adjustment:+d}" if points and points.adjustment else "0",
+                               points.total_points if points else "–"))
+            else:
+                records = records_by_member.get(entry.memberId, ())
+                values.extend((
+                    f"{sum(record.value for record in records):g}",
+                    f"{sum(record.value for record in records if record.eventType in ('EARNED_BENCH', 'CORRECTION')):g}",
+                ))
+            for column, value in enumerate(values):
+                cell = QTableWidgetItem(str(value))
+                if column == 0:
+                    cell.setData(Qt.ItemDataRole.UserRole, entry.playerId or "")
+                elif column == 1:
+                    cell.setData(Qt.ItemDataRole.UserRole, entry.memberId)
+                    self._apply_character_presentation(cell, member)
+                elif column == 3:
+                    cell.setData(Qt.ItemDataRole.UserRole, entry.attendanceId)
+                    cell.setForeground(QColor(
+                        "#e1c183" if entry.status == "bench" else "#8ec79a"))
+                self.raid_participants_table.setItem(row, column, cell)
+        self.raid_participants_table.setSortingEnabled(True)
+        self.raid_toggle_bench_button.setEnabled(bool(entries))
+        self.raid_points_button.setVisible(raid_mode)
+        self.raid_points_button.setEnabled(
+            raid_mode and bool(entries) and self._v2_raid_point_projection is not None)
+        self._update_selected_raid_header(len(entries))
+
     def _apply_character_presentation(self, item: QTableWidgetItem, member) -> None:
         """Apply the existing icon and, in the draft, the class colour."""
         if member is None or not member.className:
@@ -8798,6 +10257,10 @@ class GuildGearCheckerQt(QMainWindow):
     def _attendance_stats_section_resized(
         self, logical_index: int, _old_width: int, new_width: int,
     ) -> None:
+        if self.project_mode == "identity_v2":
+            key = f"{self._raid_view_mode('matrix')}:{logical_index}"
+            self._v2_matrix_fixed_widths[key] = max(40, int(new_width))
+            return
         if 0 <= logical_index < RAID_ATTENDANCE_FIXED_COLUMNS:
             self._attendance_stats_column_widths[logical_index] = max(40, int(new_width))
 
@@ -8806,12 +10269,30 @@ class GuildGearCheckerQt(QMainWindow):
     ) -> None:
         if 0 <= logical_index < len(self._matrix_raids):
             raid_id = self._matrix_raids[logical_index].id
-            self._attendance_matrix_column_widths[raid_id] = max(40, int(new_width))
+            if self.project_mode == "identity_v2":
+                self._v2_matrix_column_widths[
+                    f"{self._v2_matrix_grouping}:{raid_id}"] = max(40, int(new_width))
+            else:
+                self._attendance_matrix_column_widths[raid_id] = max(40, int(new_width))
 
     def toggle_selected_attendance_status(self) -> None:
         raid = self._selected_raid()
         rows = self.raid_participants_table.selectionModel().selectedRows()
         if raid is None or not rows:
+            return
+        if self.project_mode == "identity_v2":
+            from app.identity_v2_raid_ui import toggle_attendance
+
+            item = self.raid_participants_table.item(rows[0].row(), 3)
+            attendance_id = item.data(Qt.ItemDataRole.UserRole) if item else None
+            if not attendance_id:
+                return
+            try:
+                self._apply_v2_character_store(
+                    toggle_attendance(self.identity_v2_store, attendance_id))
+                self.refresh_raid_participants()
+            except Exception as exc:
+                QMessageBox.warning(self, APP_NAME, raid_error_text(exc))
             return
         if self.model.raid_points.enabled and not self._ensure_raid_point_scope():
             return
@@ -8889,6 +10370,12 @@ class GuildGearCheckerQt(QMainWindow):
 
     def _scoped_raids(self, prefix: str) -> list:
         start, end, category, raid_type, _active_only = self._raid_filter_values(prefix)
+        if (prefix == "matrix" and self.project_mode == "identity_v2"
+                and self._v2_attendance_adapter is not None):
+            return list(self._v2_attendance_adapter.scoped_raids(
+                start=start, end=end, category=category, raid_type=raid_type,
+                limit=int(self.matrix_raid_limit.currentData() or 0),
+                complete_days=self._v2_matrix_grouping == "day"))
         raids = [
             raid for raid in self.model.raids
             if raid.status == "recorded"
@@ -8933,6 +10420,9 @@ class GuildGearCheckerQt(QMainWindow):
         sorted_rows = self._sort_attendance_rows(previous_rows)
         self._reorder_attendance_matrix_rows(previous_rows, sorted_rows)
         self._matrix_players = sorted_rows
+        if self.project_mode == "identity_v2":
+            self._v2_matrix_order[self._raid_view_mode("matrix")] = [
+                row["identifier"] for row in sorted_rows]
 
     def _matrix_sort_dropdown_changed(self, _index: int) -> None:
         key = str(self.matrix_sort.currentData() or "name")
@@ -8943,7 +10433,16 @@ class GuildGearCheckerQt(QMainWindow):
         self._queue_attendance_sort()
 
     def _matrix_fixed_column_clicked(self, column: int) -> None:
-        key_by_column = {
+        key_by_column = ({
+            0: "name", 1: "player_name", 2: "role", 3: "percent",
+            4: "day_percent", 5: "present", 6: "bench", 7: "eligible",
+            8: "current_streak", 9: "longest_streak",
+        } if self.project_mode == "identity_v2" and self._raid_view_mode("matrix") == "character"
+        else {
+            0: "name", 1: "main_name", 2: "percent", 3: "day_percent",
+            4: "present", 5: "bench", 6: "eligible",
+            7: "current_streak", 8: "longest_streak",
+        } if self.project_mode == "identity_v2" else {
             0: "name",
             1: "percent",
             2: "present",
@@ -8954,7 +10453,7 @@ class GuildGearCheckerQt(QMainWindow):
             7: "current_streak",
             8: "longest_streak",
             9: "last_attendance",
-        }
+        })
         key = key_by_column.get(column)
         if key is None:
             return
@@ -8973,7 +10472,18 @@ class GuildGearCheckerQt(QMainWindow):
         self._queue_attendance_sort()
 
     def _sync_matrix_sort_indicator(self) -> None:
-        column_by_key = {
+        column_by_key = ({
+            "name": 0, "player_name": 1, "role": 2,
+            "percent": 3, "day_percent": 4,
+            "present": 5, "bench": 6, "eligible": 7,
+            "current_streak": 8, "longest_streak": 9,
+        } if self.project_mode == "identity_v2" and self._raid_view_mode("matrix") == "character"
+        else {
+            "name": 0, "main_name": 1,
+            "percent": 2, "day_percent": 3,
+            "present": 4, "bench": 5, "eligible": 6,
+            "current_streak": 7, "longest_streak": 8,
+        } if self.project_mode == "identity_v2" else {
             "name": 0,
             "percent": 1,
             "present": 2,
@@ -8984,7 +10494,7 @@ class GuildGearCheckerQt(QMainWindow):
             "current_streak": 7,
             "longest_streak": 8,
             "last_attendance": 9,
-        }
+        })
         header = self.raid_stats_table.horizontalHeader()
         column = column_by_key.get(self._matrix_sort_key)
         header.setSortIndicatorShown(column is not None)
@@ -8997,6 +10507,23 @@ class GuildGearCheckerQt(QMainWindow):
 
     def _sort_attendance_rows(self, rows: list[dict]) -> list[dict]:
         sort_key = self._matrix_sort_key
+        if self.project_mode == "identity_v2":
+            keys = {
+                "name": lambda row: row["label"].casefold(),
+                "player_name": lambda row: (row["v2_subject"].player_name or "").casefold(),
+                "main_name": lambda row: (row["v2_subject"].main_name or "").casefold(),
+                "role": lambda row: row["v2_subject"].current_role or "",
+                "percent": lambda row: row["stat"].attendance_percent,
+                "day_percent": lambda row: row["stat"].day_percent,
+                "present": lambda row: row["stat"].total_attendances - row["stat"].bench_attendances,
+                "bench": lambda row: row["stat"].bench_attendances,
+                "eligible": lambda row: row["stat"].eligible_raids,
+                "current_streak": lambda row: row["stat"].current_streak,
+                "longest_streak": lambda row: row["stat"].longest_streak,
+            }
+            return sorted(rows, key=lambda row: (
+                keys.get(sort_key, keys["name"])(row), row["label"].casefold(),
+                row["identifier"]), reverse=not self._matrix_sort_ascending)
         key_functions = {
             "name": lambda row: row["label"].casefold(),
             "percent": lambda row: row["stat"].attendance_percent,
@@ -9104,18 +10631,15 @@ class GuildGearCheckerQt(QMainWindow):
                     and not any(query in name.casefold() for name in character_names)
                 ):
                     continue
-                relevant_raid_ids = {
-                    raid.id for raid in raids
-                    if player_is_relevant(
-                        raid, self.model.attendance_tracking_start_date,
-                        player.membershipStartDate, player.membershipEndDate,
-                    )
-                }
+                relevant_raid_ids = player_eligible_raid_ids(
+                    self.model, player, player_members,
+                )
                 try:
                     stat = calculate_statistics(
                         player.playerId, raids, self.model.raid_attendance,
                         self.model.attendance_tracking_start_date,
                         player.membershipStartDate, player.membershipEndDate,
+                        member_ids={member.id for member in player_members},
                         eligible_raid_ids=relevant_raid_ids,
                     )
                 except Exception:
@@ -9128,6 +10652,7 @@ class GuildGearCheckerQt(QMainWindow):
                     "stat": stat,
                     "member": main,
                     "player": player,
+                    "member_ids": {member.id for member in player_members},
                     "relevant_raid_ids": relevant_raid_ids,
                 })
         else:
@@ -9169,8 +10694,182 @@ class GuildGearCheckerQt(QMainWindow):
 
         return self._sort_attendance_rows(rows)
 
+    def _v2_matrix_background(self, cell) -> QColor:
+        if (self._v2_matrix_colors == "class" and cell.status == "present"
+                and cell.class_name in CLASS_COLORS):
+            return QColor(CLASS_COLORS[cell.class_name])
+        return QColor(RAID_MATRIX_STATUS_COLORS[cell.status])
+
+    def _repaint_v2_matrix_colors(self) -> None:
+        if self.project_mode != "identity_v2":
+            return
+        for row_index, info in enumerate(self._matrix_players):
+            for column, cell in enumerate(self._v2_matrix_cells_by_id.get(
+                    info["identifier"], ())):
+                item = self.raid_matrix_table.item(row_index, column)
+                if item is not None:
+                    color = self._v2_matrix_background(cell)
+                    item.setBackground(color)
+                    item.setData(RAID_MATRIX_BACKGROUND_ROLE, color.name())
+        self.raid_matrix_table.viewport().update()
+
+    def _v2_matrix_cell_tooltip(self, cell) -> str:
+        if cell.status == "irrelevant":
+            return tr("raids.not_relevant")
+        lines = [tr("identity_v2_matrix.day_visited",
+                    visited=cell.visited_raids, total=cell.relevant_raids)
+                 if self._v2_matrix_grouping == "day" else
+                 tr(f"raids.attendance_status_{cell.status}")
+                 if cell.status != "absent" else tr("raids.absent")]
+        for entry in cell.entries:
+            raid = (self._v2_attendance_adapter.raid_by_id.get(entry.raidId)
+                    if self._v2_attendance_adapter is not None else None)
+            lines.append(tr("identity_v2_matrix.entry_tooltip",
+                            raid=raid.name if raid is not None else entry.raidId,
+                            character=entry.name,
+                            class_name=entry.class_name or tr("identity_v2_views.unknown_class"),
+                            status=tr(f"raids.attendance_status_{entry.status}")))
+        return "\n".join(lines)
+
+    def _refresh_v2_raid_matrix(self) -> None:
+        adapter = self._v2_attendance_adapter
+        if adapter is None:
+            return
+        level = self._raid_view_mode("matrix")
+        grouping = self._v2_matrix_grouping
+        raids = tuple(self._scoped_raids("matrix"))
+        cache_key = (level, grouping, tuple(raid.id for raid in raids))
+        cached = self._v2_matrix_cache.get(cache_key)
+        if cached is None:
+            cached = (adapter.columns(raids, grouping),
+                      adapter.subjects(raids, level, grouping))
+            if len(self._v2_matrix_cache) >= 8:
+                self._v2_matrix_cache.pop(next(iter(self._v2_matrix_cache)))
+            self._v2_matrix_cache[cache_key] = cached
+        columns, subjects = cached
+        query = self.matrix_player_search.text().strip().casefold()
+        subject_id = str(self.matrix_subject.currentData() or "")
+        filtered = [subject for subject in subjects
+                    if (not subject_id or subject.identifier == subject_id)
+                    and (not query or query in subject.label.casefold()
+                         or query in (subject.player_name or "").casefold()
+                         or query in (subject.main_name or "").casefold())]
+        previous_order = self._v2_matrix_order.get(level, [])
+        index_by_id = {identifier: index for index, identifier in enumerate(previous_order)}
+        filtered.sort(key=lambda subject: (
+            index_by_id.get(subject.identifier, len(index_by_id)),
+            subject.label.casefold(), subject.identifier))
+        self._v2_matrix_order[level] = [
+            *previous_order, *(subject.identifier for subject in filtered
+                               if subject.identifier not in index_by_id)]
+        rows = [{"identifier": subject.identifier, "label": subject.label,
+                 "stat": subject.stat, "v2_subject": subject}
+                for subject in filtered]
+        selected_item = self.raid_stats_table.item(self.raid_stats_table.currentRow(), 0)
+        selected_id = (selected_item.data(Qt.ItemDataRole.UserRole)
+                       if selected_item is not None else None)
+        stats_scroll = self.raid_stats_table.verticalScrollBar().value()
+        matrix_scroll = self.raid_matrix_table.horizontalScrollBar().value()
+        headers = ([tr("identity_v2_matrix.player"),
+                    tr("identity_v2_matrix.current_main")]
+                   if level == "player" else
+                   [tr("identity_v2_matrix.character"),
+                    tr("identity_v2_matrix.player"),
+                    tr("identity_v2_matrix.main_twink")])
+        headers.extend((
+            tr("identity_v2_matrix.raid_percent"),
+            tr("identity_v2_matrix.day_percent"),
+            tr("identity_v2_matrix.present"),
+            tr("identity_v2_matrix.bench"),
+            tr("identity_v2_matrix.relevant_raids"),
+            tr("identity_v2_matrix.current_streak"),
+            tr("identity_v2_matrix.best_streak"),
+        ))
+        widths = ((175, 155, 100, 100, 95, 72, 110, 105, 105)
+                  if level == "player" else
+                  (175, 155, 105, 100, 100, 95, 72, 110, 105, 105))
+        stats_table, matrix_table = self.raid_stats_table, self.raid_matrix_table
+        stats_header, matrix_header = stats_table.horizontalHeader(), matrix_table.horizontalHeader()
+        for widget in (stats_table, matrix_table, stats_header, matrix_header):
+            widget.blockSignals(True)
+        stats_table.setUpdatesEnabled(False)
+        matrix_table.setUpdatesEnabled(False)
+        try:
+            stats_table.setRowCount(len(rows))
+            stats_table.setColumnCount(len(headers))
+            stats_table.setHorizontalHeaderLabels(headers)
+            for column, width in enumerate(widths):
+                stats_table.setColumnWidth(column, self._v2_matrix_fixed_widths.get(
+                    f"{level}:{column}", width))
+            matrix_table.setRowCount(len(rows))
+            matrix_table.setColumnCount(len(columns))
+            matrix_table.setHorizontalHeaderLabels([
+                f"{column.label}\n{column.date[5:]}" if grouping == "raid"
+                else column.date for column in columns])
+            for column_index, column in enumerate(columns):
+                matrix_table.setColumnWidth(column_index,
+                    self._v2_matrix_column_widths.get(
+                        f"{grouping}:{column.id}", 74))
+                item = matrix_table.horizontalHeaderItem(column_index)
+                if item is not None:
+                    item.setToolTip("\n".join(
+                        f"{raid.date} · {raid.name}" for raid in column.raids))
+            for row_index, info in enumerate(rows):
+                subject = info["v2_subject"]
+                stat = subject.stat
+                values = ([subject.label, subject.main_name or "–"]
+                          if level == "player" else
+                          [f"☠ {subject.label}" if subject.is_dead else subject.label,
+                           subject.player_name or "–",
+                           tr(f"identity_v2_views.role_{subject.current_role}")
+                           if subject.current_role else "–"])
+                values.extend((stat.attendance_percent, stat.day_percent,
+                               stat.total_attendances - stat.bench_attendances,
+                               stat.bench_attendances, stat.eligible_raids,
+                               stat.current_streak, stat.longest_streak))
+                for column_index, value in enumerate(values):
+                    item = QTableWidgetItem()
+                    item.setData(Qt.ItemDataRole.DisplayRole, value)
+                    if column_index == 0:
+                        item.setData(Qt.ItemDataRole.UserRole, subject.identifier)
+                        if subject.is_dead:
+                            item.setToolTip(tr("life.dead"))
+                    stats_table.setItem(row_index, column_index, item)
+                for column_index, cell in enumerate(subject.cells):
+                    item = QTableWidgetItem(
+                        "✓" if cell.status == "present" else
+                        tr("raids.bench_short") if cell.status == "bench" else
+                        "–" if cell.status == "irrelevant" else "")
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    color = self._v2_matrix_background(cell)
+                    item.setBackground(color)
+                    item.setData(RAID_MATRIX_BACKGROUND_ROLE, color.name())
+                    item.setForeground(QColor("#ffffff"))
+                    item.setToolTip(self._v2_matrix_cell_tooltip(cell))
+                    matrix_table.setItem(row_index, column_index, item)
+                stats_table.setRowHeight(row_index, RAID_MATRIX_ROW_HEIGHT)
+                matrix_table.setRowHeight(row_index, RAID_MATRIX_ROW_HEIGHT)
+                if subject.identifier == selected_id:
+                    stats_table.selectRow(row_index)
+        finally:
+            for widget in (stats_table, matrix_table, stats_header, matrix_header):
+                widget.blockSignals(False)
+            stats_table.setUpdatesEnabled(True)
+            matrix_table.setUpdatesEnabled(True)
+        stats_table.verticalScrollBar().setValue(stats_scroll)
+        matrix_table.verticalScrollBar().setValue(stats_scroll)
+        matrix_table.horizontalScrollBar().setValue(matrix_scroll)
+        self._matrix_raids = list(columns)
+        self._matrix_players = rows
+        self._v2_matrix_cells_by_id = {
+            subject.identifier: subject.cells for subject in filtered}
+        self._sync_matrix_sort_indicator()
+
     def refresh_raid_matrix(self, *, force: bool = True) -> None:
         if not hasattr(self, "raid_stats_table") or not hasattr(self, "raid_matrix_table"):
+            return
+        if self.project_mode == "identity_v2":
+            self._refresh_v2_raid_matrix()
             return
         if not force and not (
             self._raid_view_dirty["matrix"] or self._raid_view_dirty["attendance"]
@@ -9242,7 +10941,12 @@ class GuildGearCheckerQt(QMainWindow):
                         )
                     header_item.setToolTip(tooltip)
 
-            lookup = self.model.attendance_lookup()
+            family_attendance_lookup: dict[tuple[str, str], object] = {}
+            members_by_id = {member.id: member for member in self.model.members}
+            for attendance in self.model.raid_attendance:
+                current_member = members_by_id.get(attendance.memberId)
+                if current_member is not None and current_member.playerId:
+                    family_attendance_lookup[(attendance.raidId, current_member.playerId)] = attendance
             member_lookup = {
                 (entry.raidId, entry.memberId): entry
                 for entry in self.model.raid_attendance
@@ -9292,22 +10996,22 @@ class GuildGearCheckerQt(QMainWindow):
                 for column, raid in enumerate(raids):
                     relevant = raid.id in info["relevant_raid_ids"]
                     entry = (
-                        lookup.get(raid.id, {}).get(player.playerId)
+                        family_attendance_lookup.get((raid.id, player.playerId))
                         if view_mode == "player" and player is not None
                         else member_lookup.get((raid.id, member.id)) if member is not None else None
                     )
                     if not relevant:
-                        text_value, color, tooltip = "–", QColor("#59616a"), tr("raids.not_relevant")
+                        text_value, color, tooltip = "–", QColor(RAID_MATRIX_STATUS_COLORS["irrelevant"]), tr("raids.not_relevant")
                     elif entry is None:
-                        text_value, color, tooltip = "", QColor("#11161d"), tr("raids.absent")
+                        text_value, color, tooltip = "", QColor(RAID_MATRIX_STATUS_COLORS["absent"]), tr("raids.absent")
                     elif entry.status == "bench":
                         text_value, color, tooltip = (
-                            tr("raids.bench_short"), QColor("#b18420"),
+                            tr("raids.bench_short"), QColor(RAID_MATRIX_STATUS_COLORS["bench"]),
                             tr("raids.attendance_status_bench"),
                         )
                     else:
                         text_value, color, tooltip = (
-                            "✓", QColor("#248447"), tr("raids.attendance_status_present"),
+                            "✓", QColor(RAID_MATRIX_STATUS_COLORS["present"]), tr("raids.attendance_status_present"),
                         )
                     item = QTableWidgetItem(text_value)
                     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -9345,6 +11049,11 @@ class GuildGearCheckerQt(QMainWindow):
         if not (0 <= column < len(getattr(self, "_matrix_raids", []))):
             return
         raid = self._matrix_raids[column]
+        if self.project_mode == "identity_v2":
+            self.switch_page("raid")
+            raid_id = raid.raids[0].id
+            self._select_raid_row(raid_id)
+            return
         self.raid_subtabs.setCurrentIndex(0)
         for row in range(self.raid_table.rowCount()):
             item = self.raid_table.item(row, 0)
@@ -9363,7 +11072,10 @@ class GuildGearCheckerQt(QMainWindow):
         view_mode = self._raid_view_mode("matrix")
         raid = self._matrix_raids[column]
         entry = (
-            self.model.attendance_lookup().get(raid.id, {}).get(player.playerId)
+            next((
+                value for value in self.model.attendance_for_raid(raid.id)
+                if value.memberId in info.get("member_ids", set())
+            ), None)
             if view_mode == "player" and player is not None
             else next((
                 value for value in self.model.attendance_for_raid(raid.id)
@@ -9373,11 +11085,7 @@ class GuildGearCheckerQt(QMainWindow):
         status = tr("raids.not_relevant")
         character = "–"
         attendance_type = "–"
-        relevant = player_is_relevant(
-            raid, self.model.attendance_tracking_start_date,
-            player.membershipStartDate if player is not None else None,
-            player.membershipEndDate if player is not None else None,
-        )
+        relevant = raid.id in info["relevant_raid_ids"]
         if relevant and entry is None:
             status = tr("raids.absent")
         elif entry is not None:
@@ -9395,6 +11103,25 @@ class GuildGearCheckerQt(QMainWindow):
         )
 
     def create_raid_dialog(self) -> None:
+        if self.project_mode == "identity_v2":
+            from app.identity_v2_raid_ui import V2RaidDialogModel, apply_raid_dialog
+
+            dialog = RaidEditorDialog(
+                self, model=V2RaidDialogModel(self.identity_v2_store), v2_mode=True)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            try:
+                changed, raid_id = apply_raid_dialog(
+                    self.identity_v2_store, None, dialog.values(),
+                    set(dialog.bench_values()))
+                self._apply_v2_character_store(changed)
+                self.refresh_raids()
+                self._select_raid_row(raid_id)
+                if dialog.adjust_points_after_save:
+                    self._adjust_v2_raid_points()
+            except Exception as exc:
+                QMessageBox.warning(self, APP_NAME, raid_error_text(exc))
+            return
         dialog = RaidEditorDialog(self, model=self.model)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -9416,6 +11143,9 @@ class GuildGearCheckerQt(QMainWindow):
             QMessageBox.warning(self, APP_NAME, raid_error_text(exc))
 
     def bulk_import_raid_csvs(self) -> None:
+        if self.project_mode == "identity_v2":
+            self.analyze_v2_csv_files()
+            return
         folder = QFileDialog.getExistingDirectory(self, tr("raids.bulk_select_folder"))
         if not folder:
             return
@@ -9440,6 +11170,27 @@ class GuildGearCheckerQt(QMainWindow):
         if raid is None:
             QMessageBox.information(self, APP_NAME, tr("raids.select_first"))
             return
+        if self.project_mode == "identity_v2":
+            from app.identity_v2_raid_ui import V2RaidDialogModel, apply_raid_dialog
+
+            dialog = RaidEditorDialog(
+                self, raid=raid,
+                model=V2RaidDialogModel(self.identity_v2_store, raid.id),
+                v2_mode=True)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            try:
+                changed, raid_id = apply_raid_dialog(
+                    self.identity_v2_store, raid.id, dialog.values(),
+                    set(dialog.bench_values()))
+                self._apply_v2_character_store(changed)
+                self.refresh_raids()
+                self._select_raid_row(raid_id)
+                if dialog.adjust_points_after_save:
+                    self._adjust_v2_raid_points()
+            except Exception as exc:
+                QMessageBox.warning(self, APP_NAME, raid_error_text(exc))
+            return
         dialog = RaidEditorDialog(self, raid=raid, model=self.model)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -9455,6 +11206,9 @@ class GuildGearCheckerQt(QMainWindow):
             QMessageBox.warning(self, APP_NAME, raid_error_text(exc))
 
     def adjust_selected_raid_points(self) -> None:
+        if self.project_mode == "identity_v2":
+            self._adjust_v2_raid_points()
+            return
         raid = self._selected_raid()
         if raid is None:
             QMessageBox.information(self, APP_NAME, tr("raids.select_first"))
@@ -9495,6 +11249,16 @@ class GuildGearCheckerQt(QMainWindow):
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
+        if self.project_mode == "identity_v2":
+            from app.identity_v2_raid_ui import delete_raid
+
+            try:
+                self._apply_v2_character_store(
+                    delete_raid(self.identity_v2_store, raid.id))
+                self.refresh_raids()
+            except Exception as exc:
+                QMessageBox.warning(self, APP_NAME, raid_error_text(exc))
+            return
         self.model.delete_raid(raid.id)
         self.autosave()
         if not self._rebuild_raid_derived_state():
@@ -9505,7 +11269,10 @@ class GuildGearCheckerQt(QMainWindow):
         if raid is None:
             QMessageBox.information(self, APP_NAME, tr("raids.select_first"))
             return
-        entries = self.model.attendance_for_raid(raid.id)
+        entries = ([entry for entry in self.identity_v2_store.attendance
+                    if entry.raidId == raid.id]
+                   if self.project_mode == "identity_v2" else
+                   self.model.attendance_for_raid(raid.id))
         if not entries:
             return
         answer = QMessageBox.question(
@@ -9515,6 +11282,16 @@ class GuildGearCheckerQt(QMainWindow):
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
+        if self.project_mode == "identity_v2":
+            from app.identity_v2_raid_ui import reset_raid_attendance
+
+            try:
+                self._apply_v2_character_store(
+                    reset_raid_attendance(self.identity_v2_store, raid.id))
+                self.refresh_raids()
+            except Exception as exc:
+                QMessageBox.warning(self, APP_NAME, raid_error_text(exc))
+            return
         self.model.reset_raid_attendance(raid.id)
         self.autosave()
         if not self._rebuild_raid_derived_state():
@@ -9522,18 +11299,17 @@ class GuildGearCheckerQt(QMainWindow):
 
     # ---------- administration / settings ----------
     def _sync_admin_controls(self) -> None:
+        v2_store = (self.identity_v2_store
+                    if self.project_mode == "identity_v2" else None)
         if hasattr(self, "guild_name_edit"):
-            self.guild_name_edit.setText(self.model.guild_name)
-            self.guild_realm_edit.setText(self.model.realm)
+            self.guild_name_edit.setText(
+                v2_store.guildName if v2_store is not None else self.model.guild_name)
+            self.guild_realm_edit.setText(
+                v2_store.realm if v2_store is not None else self.model.realm)
         if hasattr(self, "points_enabled_check"):
-            active_mode = self.model.active_point_mode()
-            for checkbox, checked in (
-                (self.points_enabled_check, active_mode == POINT_MODE_RAID),
-                (self.dkp_enabled_check, active_mode == POINT_MODE_ETERNAL),
-            ):
-                checkbox.blockSignals(True)
-                checkbox.setChecked(checked)
-                checkbox.blockSignals(False)
+            active_mode = (v2_store.pointMode if v2_store is not None
+                           else self.model.active_point_mode())
+            self._sync_point_mode_controls(active_mode)
         if hasattr(self, "raid_scope_all"):
             state = self.model.raid_points
             self.raid_scope_all.blockSignals(True)
@@ -9544,23 +11320,105 @@ class GuildGearCheckerQt(QMainWindow):
             self.raid_scope_start.setEnabled(state.calculation_mode == "from_date")
             self.raid_scope_all.blockSignals(False)
             self.raid_scope_from.blockSignals(False)
-            if self.clm_roster_combo.count() == 0 and self.model.clm_roster_id:
-                self.clm_roster_combo.addItem(self.model.clm_roster_id, self.model.clm_roster_id)
+            if self.clm_roster_combo.count() == 0:
+                if v2_store is not None:
+                    self._restore_v2_clm_roster_selection()
+                elif self.model.clm_roster_id:
+                    self.clm_roster_combo.addItem(
+                        self.model.clm_roster_id, self.model.clm_roster_id)
             self._update_feature_controls()
-        self._sync_points_ui_visibility()
-        self._refresh_visible_dkp_details()
+        if v2_store is None:
+            self._sync_points_ui_visibility()
+            self._refresh_visible_dkp_details()
+
+    def _sync_point_mode_controls(self, active_mode: str) -> None:
+        for checkbox, checked in (
+                (self.points_enabled_check, active_mode == POINT_MODE_RAID),
+                (self.dkp_enabled_check, active_mode == POINT_MODE_ETERNAL)):
+            blocked = checkbox.blockSignals(True)
+            checkbox.setChecked(checked)
+            checkbox.blockSignals(blocked)
+
+    def _restore_v2_clm_roster_selection(self) -> None:
+        store = self.identity_v2_store
+        if store is None or not (store.clmRosterId or store.clmRosterName):
+            return
+        blocked = self.clm_roster_combo.blockSignals(True)
+        try:
+            self.clm_roster_combo.clear()
+            label = store.clmRosterName or "Roster"
+            if store.clmRosterId:
+                label = f"{label} · {store.clmRosterId}"
+            self.clm_roster_combo.addItem(label, store.clmRosterId)
+            self.clm_roster_combo.setItemData(
+                0, store.clmRosterName, int(Qt.ItemDataRole.UserRole) + 1)
+        finally:
+            self.clm_roster_combo.blockSignals(blocked)
+
+    def _v2_clm_roster_changed(self, index: int) -> None:
+        store = self.identity_v2_store
+        if self.project_mode != "identity_v2" or store is None or index < 0:
+            return
+        name = self.clm_roster_combo.itemData(
+            index, int(Qt.ItemDataRole.UserRole) + 1)
+        roster_id = self.clm_roster_combo.itemData(index)
+        if (name is None or (name == store.clmRosterName
+                             and roster_id == store.clmRosterId)):
+            return
+        changed = copy.deepcopy(store)
+        changed.clmRosterName = str(name)
+        changed.clmRosterId = str(roster_id) if roster_id else None
+        changed.validate()
+        self.identity_v2_store = changed
+        self.identity_v2_dirty = True
+        self.refresh_project_label()
 
     def _update_feature_controls(self, _checked: bool | None = None) -> None:
+        v2_store = (self.identity_v2_store
+                    if self.project_mode == "identity_v2" else None)
         if hasattr(self, "clm_group"):
-            self.clm_group.setEnabled(self.dkp_enabled_check.isChecked())
+            self.clm_group.setEnabled(
+                v2_store is not None or self.dkp_enabled_check.isChecked())
+            self.clm_group.setVisible(True)
+            self.dkp_enabled_check.setEnabled(True)
+            self.clm_history_sync_button.setVisible(v2_store is None)
+            self.clm_v2_history_button.setVisible(v2_store is not None)
+            for button in (self.clm_v2_all_button, self.clm_v2_characters_button,
+                           self.clm_v2_raids_button):
+                button.setVisible(v2_store is not None)
         if hasattr(self, "points_group"):
-            self.points_group.setVisible(True)
+            raid_mode = (v2_store is not None
+                         and v2_store.pointMode == POINT_MODE_RAID)
+            self.points_group.setVisible(v2_store is None or raid_mode)
+            self.points_rebuild_button.setVisible(v2_store is None)
+        if hasattr(self, "settings_raid_scope_controls"):
+            self.settings_raid_scope_controls.setVisible(v2_store is None)
 
     def save_guild_master_data(self) -> None:
         guild_name = unicodedata.normalize("NFC", self.guild_name_edit.text().strip())
         realm = unicodedata.normalize("NFC", self.guild_realm_edit.text().strip())
         if not realm:
             QMessageBox.warning(self, APP_NAME, tr("raid_clm_admin.realm_required"))
+            return
+        if self.project_mode == "identity_v2" and self.identity_v2_store is not None:
+            store = self.identity_v2_store
+            if (guild_name, realm) != (store.guildName, store.realm):
+                changed = copy.deepcopy(store)
+                changed.guildName = guild_name
+                changed.realm = realm
+                changed.clmDatabaseId = None
+                changed.clmRosterId = None
+                changed.clmRosterName = None
+                changed.validate()
+                self.identity_v2_store = changed
+                self.identity_v2_dirty = True
+                self.v2_players_page.set_store(changed)
+                self.v2_character_data_page.set_store(changed)
+                self._reset_v2_clm_runtime()
+                self._restore_v2_clm_roster_selection()
+                self._refresh_v2_dkp_projection()
+            self.refresh_project_label()
+            self.set_status(tr("raid_clm_admin.guild_master_data_saved"))
             return
         if (guild_name, realm) != (self.model.guild_name, self.model.realm):
             self.model.guild_name = guild_name
@@ -9571,6 +11429,8 @@ class GuildGearCheckerQt(QMainWindow):
         self.set_status(tr("raid_clm_admin.guild_master_data_saved"))
 
     def choose_clm_path(self) -> None:
+        if self.project_mode == "identity_v2" and self.identity_v2_store is None:
+            return
         path, _filter = QFileDialog.getOpenFileName(
             self,
             tr("raid_clm_admin.choose_clm_file"),
@@ -9585,38 +11445,245 @@ class GuildGearCheckerQt(QMainWindow):
             return
         self.clm_path_edit.setText(str(selected.resolve()))
         self.clm_roster_combo.clear()
-        self._suite_settings["clm_saved_variables_path"] = str(selected.resolve())
-        update_suite_settings(
-            self._suite_settings_path,
-            clm_saved_variables_path=str(selected.resolve()),
-        )
+        if self.project_mode == "identity_v2":
+            changed = copy.deepcopy(self.identity_v2_store)
+            if changed.clmLuaPath != str(selected.resolve()):
+                had_clm_path = changed.clmLuaPath is not None
+                changed.clmLuaPath = str(selected.resolve())
+                changed.clmDatabaseId = None
+                changed.clmRosterId = None
+                if had_clm_path:
+                    changed.clmRosterName = None
+                changed.validate()
+                self.identity_v2_store = changed
+                self.identity_v2_dirty = True
+                self._restore_v2_clm_roster_selection()
+                self.refresh_project_label()
+            else:
+                self._restore_v2_clm_roster_selection()
+        else:
+            self._suite_settings["clm_saved_variables_path"] = str(selected.resolve())
+            update_suite_settings(
+                self._suite_settings_path,
+                clm_saved_variables_path=str(selected.resolve()),
+            )
         self.clm_status_label.setText(tr("raid_clm_admin.clm_path_saved"))
 
+    def _ensure_v2_clm_source(self) -> bool:
+        store = self.identity_v2_store
+        if self.project_mode != "identity_v2" or store is None:
+            return False
+        source = Path(store.clmLuaPath or "")
+        if source.name.casefold() != "classiclootmanager.lua" or not source.is_file():
+            self.choose_clm_path()
+            source = Path(self.identity_v2_store.clmLuaPath or "")
+        return source.name.casefold() == "classiclootmanager.lua" and source.is_file()
+
+    def refresh_characters_from_clm(self) -> None:
+        self._refresh_v2_from_clm("characters")
+
+    def refresh_raids_from_clm(self) -> None:
+        self._refresh_v2_from_clm("raids")
+
+    def refresh_all_from_clm(self) -> None:
+        self._refresh_v2_from_clm("all")
+
+    def _refresh_v2_from_clm(self, area: str) -> None:
+        """Collect existing review decisions before committing one V2 transaction."""
+        store = self.identity_v2_store
+        if self.project_mode != "identity_v2" or store is None:
+            return
+        if not self._ensure_v2_clm_source():
+            return
+        store = self.identity_v2_store
+        try:
+            from app.clm_detection import validate_guild_realm
+            from app.clm_identity_v2_dialog import collect_clm_identity_decisions
+            from app.clm_v2_classification_ui import collect_clm_character_classifications
+            from app.clm_v2_initialization import (
+                analyze_clm_v2_selection, inspect_clm_v2_source,
+            )
+            from app.clm_v2_initialization_ui import (
+                ClmRaidReviewDialog, _project_database_choice, _roster_choice,
+            )
+            from app.clm_raid_v2_materialization import materialize_clm_raids_into_identity_v2
+            from app.clm_v2_refresh import (
+                pending_clm_character_groups, raid_participant_identity_analysis,
+                refresh_clm_v2_characters, unresolved_raid_participant_guids,
+            )
+
+            inspection = inspect_clm_v2_source(Path(store.clmLuaPath))
+            if store.clmDatabaseId:
+                database = inspection.database(store.clmDatabaseId)
+                validate_guild_realm(store.guildName, store.realm, database)
+                database_id = database.database_id
+            else:
+                database_id = _project_database_choice(self, inspection, store)
+            if database_id is None:
+                return
+            eligible = inspection.eligible_rosters(database_id)
+            if store.clmRosterId and any(
+                    item.roster_id == store.clmRosterId for item in eligible):
+                roster_id = store.clmRosterId
+            else:
+                roster_id = _roster_choice(
+                    self, inspection, database_id, store.clmRosterName)
+            if roster_id is None:
+                return
+            roster = next(item for item in eligible if item.roster_id == roster_id)
+            analysis = analyze_clm_v2_selection(inspection, database_id, roster_id)
+            candidate = store
+            selected_raid_ids = None
+            if area in ("characters", "all"):
+                decisions = collect_clm_identity_decisions(
+                    analysis.identity_analysis, self, target_store=store)
+                if decisions is None:
+                    return
+                pending = pending_clm_character_groups(
+                    store, analysis.identity_analysis, decisions)
+                choices = collect_clm_character_classifications(
+                    analysis.identity_analysis, decisions, self,
+                    target_store=store, include_chains=pending,
+                ) if pending else {}
+                if choices is None:
+                    return
+                candidate = refresh_clm_v2_characters(
+                    store, analysis.identity_analysis, decisions, choices)
+            elif area == "raids":
+                open_guids = unresolved_raid_participant_guids(store, analysis)
+                if open_guids:
+                    selection = ClmRaidReviewDialog(
+                        store, analysis, self, selection_only=True)
+                    if selection.exec() != QDialog.DialogCode.Accepted:
+                        return
+                    selected_raid_ids = selection.selected_raid_ids()
+                    if not selected_raid_ids:
+                        return
+                    selected_analysis = replace(
+                        analysis, raids=tuple(raid for raid in analysis.raids
+                                              if raid.raid_id in selected_raid_ids))
+                    open_guids = unresolved_raid_participant_guids(
+                        store, selected_analysis)
+                if open_guids:
+                    scoped = raid_participant_identity_analysis(
+                        selected_analysis, open_guids)
+                    decisions = collect_clm_identity_decisions(scoped, self)
+                    if decisions is None:
+                        return
+                    pending = pending_clm_character_groups(store, scoped, decisions)
+                    choices = collect_clm_character_classifications(
+                        scoped, decisions, self,
+                        target_store=store, include_chains=pending,
+                    ) if pending else {}
+                    if choices is None:
+                        return
+                    candidate = refresh_clm_v2_characters(
+                        store, scoped, decisions, choices)
+                    analysis = analyze_clm_v2_selection(
+                        inspection, database_id, roster_id)
+            if area in ("raids", "all"):
+                review_analysis = (
+                    replace(analysis, raids=tuple(raid for raid in analysis.raids
+                                                  if raid.raid_id in selected_raid_ids))
+                    if selected_raid_ids is not None else analysis)
+                remaining = unresolved_raid_participant_guids(
+                    candidate, review_analysis)
+                if remaining:
+                    raise ValueError(
+                        "Raidteilnehmer-GUIDs bleiben ungeklärt: "
+                        + ", ".join(remaining))
+                review = ClmRaidReviewDialog(candidate, review_analysis, self)
+                if review.exec() != QDialog.DialogCode.Accepted:
+                    return
+                candidate = materialize_clm_raids_into_identity_v2(
+                    review.working_store, review_analysis, review.selected_types(),
+                    selected_raid_ids=review.selected_raid_ids())
+            pending_service = None
+            snapshot = None
+            if area == "all":
+                pending_service = ClmDkpRefreshService()
+                snapshot = pending_service.refresh_from_document(
+                    inspection.document, database_id=database_id,
+                    roster_id=roster_id)
+            candidate = copy.deepcopy(candidate)
+            candidate.clmLuaPath = store.clmLuaPath
+            candidate.clmDatabaseId = database_id
+            candidate.clmRosterId = roster_id
+            candidate.clmRosterName = roster.name
+            candidate.validate()
+            message = tr(
+                "raid_clm_admin.clm_update_summary", roster=roster.name,
+                roster_id=roster_id,
+                characters=len(candidate.members) - len(store.members),
+                raids=len(candidate.raids) - len(store.raids),
+                dkp=len(snapshot.balances) if snapshot else "–")
+            if QMessageBox.question(self, tr("raid_clm_admin.clm_update_title"), message,
+                                    QMessageBox.StandardButton.Yes |
+                                    QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+                return
+            if candidate.to_payload() != store.to_payload():
+                self._apply_v2_character_store(candidate)
+                self.v2_character_data_page.set_store(candidate)
+            if snapshot is not None:
+                self._clm_refresh_service = pending_service
+                self._v2_dkp_snapshot = snapshot
+                self._v2_dkp_cache_project_path = self.identity_v2_project_path
+                self._refresh_v2_dkp_projection()
+            self.clm_roster_combo.clear()
+            self._restore_v2_clm_roster_selection()
+            self.clm_status_label.setText(tr("raid_clm_admin.clm_update_done"))
+        except Exception as exc:
+            QMessageBox.warning(self, "CLM-Aktualisierung", str(exc))
+
     def refresh_dkp(self) -> None:
-        if not self.model.dkp_enabled:
+        is_v2 = self.project_mode == "identity_v2" and self.identity_v2_store is not None
+        if not is_v2 and not self.model.dkp_enabled:
             QMessageBox.information(self, APP_NAME, tr("raid_clm_admin.enable_dkp_first"))
             return
-        source = Path(self.clm_path_edit.text().strip())
+        if is_v2 and not self._ensure_v2_clm_source():
+            return
+        source = Path(self.identity_v2_store.clmLuaPath if is_v2
+                      else self.clm_path_edit.text().strip())
         if source.name.casefold() != "classiclootmanager.lua" or not source.is_file():
             self.clm_status_label.setText(tr("raid_clm_admin.clm_file_missing"))
             QMessageBox.warning(self, APP_NAME, tr("raid_clm_admin.clm_file_missing"))
             return
         requested_roster_id = self.clm_roster_combo.currentData()
-        if requested_roster_id is None and self.model.clm_roster_id:
+        if is_v2 and not requested_roster_id:
+            requested_roster_id = self.identity_v2_store.clmRosterId
+        if not is_v2 and requested_roster_id is None and self.model.clm_roster_id:
             requested_roster_id = self.model.clm_roster_id
+        requested_roster_name = (
+            self.identity_v2_store.clmRosterName
+            if is_v2 and not requested_roster_id else None)
+        guild_name = (self.identity_v2_store.guildName if is_v2
+                      else self.model.guild_name)
+        realm = (self.identity_v2_store.realm if is_v2
+                 else self.model.realm)
         try:
             snapshot = self._clm_refresh_service.refresh_for_project(
                 source,
-                project_guild_name=self.model.guild_name,
-                project_realm=self.model.realm,
+                project_guild_name=guild_name,
+                project_realm=realm,
+                requested_database_id=(self.identity_v2_store.clmDatabaseId
+                                       if is_v2 else None),
                 requested_roster_id=str(requested_roster_id) if requested_roster_id else None,
+                requested_roster_name=requested_roster_name,
             )
         except ClmRosterSelectionRequired as exc:
-            self.clm_roster_combo.clear()
-            for roster in exc.rosters:
-                self.clm_roster_combo.addItem(
-                    f"{roster.name} · {roster.roster_id}", roster.roster_id,
-                )
+            blocked = self.clm_roster_combo.blockSignals(True)
+            try:
+                self.clm_roster_combo.clear()
+                for roster in exc.rosters:
+                    index = self.clm_roster_combo.count()
+                    self.clm_roster_combo.addItem(
+                        f"{roster.name} · {roster.roster_id}", roster.roster_id)
+                    self.clm_roster_combo.setItemData(
+                        index, roster.name, int(Qt.ItemDataRole.UserRole) + 1)
+                if is_v2:
+                    self.clm_roster_combo.setCurrentIndex(-1)
+            finally:
+                self.clm_roster_combo.blockSignals(blocked)
             self.clm_status_label.setText(tr("raid_clm_admin.choose_roster_status"))
             return
         except Exception as exc:
@@ -9627,16 +11694,37 @@ class GuildGearCheckerQt(QMainWindow):
                 retained=tr("raid_clm_admin.cache_retained") if retained else tr("raid_clm_admin.no_cache"),
             ))
             return
-        self.clm_roster_combo.clear()
-        self.clm_roster_combo.addItem(
-            f"{snapshot.roster_name} · {snapshot.roster_id}", snapshot.roster_id,
-        )
-        matching = match_characters(snapshot.balances, self.model.members)
-        self._clm_dkp_by_member_id = {
-            match.member_id: match.points for match in matching.matches
-        }
-        self._refresh_visible_dkp_details()
-        if self.model.clm_roster_id != snapshot.roster_id:
+        blocked = self.clm_roster_combo.blockSignals(True)
+        try:
+            self.clm_roster_combo.clear()
+            self.clm_roster_combo.addItem(
+                f"{snapshot.roster_name} · {snapshot.roster_id}", snapshot.roster_id)
+            self.clm_roster_combo.setItemData(
+                0, snapshot.roster_name, int(Qt.ItemDataRole.UserRole) + 1)
+        finally:
+            self.clm_roster_combo.blockSignals(blocked)
+        if is_v2:
+            if (self.identity_v2_store.clmRosterName != snapshot.roster_name
+                    or self.identity_v2_store.clmRosterId != snapshot.roster_id
+                    or self.identity_v2_store.clmDatabaseId != snapshot.database_id):
+                changed = copy.deepcopy(self.identity_v2_store)
+                changed.clmRosterName = snapshot.roster_name
+                changed.clmRosterId = snapshot.roster_id
+                changed.clmDatabaseId = snapshot.database_id
+                changed.validate()
+                self.identity_v2_store = changed
+                self.identity_v2_dirty = True
+                self.refresh_project_label()
+            self._v2_dkp_snapshot = snapshot
+            self._v2_dkp_cache_project_path = self.identity_v2_project_path
+            self._refresh_v2_dkp_projection()
+        else:
+            matching = match_characters(snapshot.balances, self.model.members)
+            self._clm_dkp_by_member_id = {
+                match.member_id: match.points for match in matching.matches
+            }
+            self._refresh_visible_dkp_details()
+        if not is_v2 and self.model.clm_roster_id != snapshot.roster_id:
             self.model.clm_roster_id = snapshot.roster_id
             self.model.dirty = True
             self.autosave()
@@ -9658,6 +11746,8 @@ class GuildGearCheckerQt(QMainWindow):
 
     def sync_clm_raid_history(self) -> None:
         """Replay and persist CLM history only after an explicit preview confirmation."""
+        if self.project_mode == "identity_v2":
+            return
         if self.model.active_point_mode() != POINT_MODE_ETERNAL:
             QMessageBox.information(self, APP_NAME, tr("raid_clm_admin.enable_dkp_first"))
             return
@@ -9752,6 +11842,14 @@ class GuildGearCheckerQt(QMainWindow):
             return
         self._rebuild_raid_derived_state()
 
+    def _rebuild_settings_raid_points(self) -> None:
+        if self.project_mode == "identity_v2":
+            if (self.identity_v2_store is not None
+                    and self.identity_v2_store.pointMode == POINT_MODE_RAID):
+                self._rebuild_v2_raid_points()
+            return
+        self.rebuild_raid_points()
+
     def _ensure_raid_point_scope(self) -> bool:
         if not self.model.raid_points.enabled:
             return True
@@ -9801,9 +11899,19 @@ class GuildGearCheckerQt(QMainWindow):
         self._rebuild_raid_derived_state()
         self.refresh_all(select_first=False)
 
-    def _reset_project_services(self) -> None:
+    def _reset_v2_clm_runtime(self) -> None:
         self._clm_refresh_service = ClmDkpRefreshService()
         self._clm_dkp_by_member_id = {}
+        self._v2_dkp_snapshot = None
+        self._v2_dkp_cache_project_path = None
+        self._v2_current_dkp_by_member_id = {}
+        self._v2_dkp_projection = None
+        if hasattr(self, "clm_roster_combo"):
+            self.clm_roster_combo.clear()
+            self.clm_status_label.setText(tr("raid_clm_admin.clm_not_refreshed"))
+
+    def _reset_project_services(self) -> None:
+        self._reset_v2_clm_runtime()
         if hasattr(self, "_attendance_stats_column_widths"):
             self._attendance_stats_column_widths.clear()
         if hasattr(self, "_attendance_matrix_column_widths"):
@@ -9824,8 +11932,6 @@ class GuildGearCheckerQt(QMainWindow):
             self._refresh_visible_reward_details()
             self._refresh_visible_dkp_details()
         if hasattr(self, "clm_roster_combo"):
-            self.clm_roster_combo.clear()
-            self.clm_status_label.setText(tr("raid_clm_admin.clm_not_refreshed"))
             self.points_status_label.setText(tr("raid_clm_admin.raid_statistics_not_rebuilt"))
 
     def open_player_assignments(self) -> None:
@@ -10014,6 +12120,11 @@ class GuildGearCheckerQt(QMainWindow):
         self.refresh_all(select_first=False)
 
     def _points_system_toggled(self, enabled: bool) -> None:
+        if self.project_mode == "identity_v2":
+            if enabled:
+                self.set_v2_active_point_system(POINT_MODE_RAID)
+            self._sync_point_mode_controls(self.identity_v2_store.pointMode)
+            return
         if enabled == (self.model.active_point_mode() == POINT_MODE_RAID):
             return
         if enabled:
@@ -10044,6 +12155,11 @@ class GuildGearCheckerQt(QMainWindow):
         self._project_feature_state_changed()
 
     def _dkp_mode_toggled(self, enabled: bool) -> None:
+        if self.project_mode == "identity_v2":
+            if enabled:
+                self.set_v2_active_point_system(POINT_MODE_ETERNAL)
+            self._sync_point_mode_controls(self.identity_v2_store.pointMode)
+            return
         self._update_feature_controls(enabled)
         if enabled == (self.model.active_point_mode() == POINT_MODE_ETERNAL):
             return
@@ -10063,12 +12179,14 @@ class GuildGearCheckerQt(QMainWindow):
         if requested != get_language():
             set_language(requested)
             QMessageBox.information(self, tr("language.restart_title"), tr("language.restart_message"))
-        self.refresh_all(select_first=False)
+        if self.project_mode != "identity_v2":
+            self.refresh_all(select_first=False)
         self.set_status(tr("checker.settings_saved"))
 
     # ---------- projects ----------
     def _confirm_discard(self) -> bool:
-        if not self.model.dirty:
+        dirty = self.identity_v2_dirty if self.project_mode == "identity_v2" else self.model.dirty
+        if not dirty:
             return True
         answer = QMessageBox.question(
             self, APP_NAME, tr("checker.discard_changes"),
@@ -10079,16 +12197,14 @@ class GuildGearCheckerQt(QMainWindow):
     def new_project(self) -> None:
         if not self._confirm_discard():
             return
-        self.model.new_empty()
-        self._reset_project_services()
-        self._invalidate_project_handoff()
-        self.selected_member_id = None
-        self.autosave()
-        self.set_member_tab("Gildenliste", refresh=False)
-        self.refresh_all(select_first=False)
-        self.clear_detail()
+        from app.identity_v2 import IdentityV2Store
+
+        store = IdentityV2Store()
+        self.adopt_identity_v2_project(store)
+        self.identity_v2_dirty = True
+        self.switch_page("rooster")
         path, _filter = QFileDialog.getSaveFileName(
-            self, tr("checker.save_project_title"), "Neue_Gilde.ggc",
+            self, tr("checker.save_project_title"), "Neue_Gilde_V2.ggc",
             "Guild Gear Checker (*.ggc)",
         )
         if not path:
@@ -10096,12 +12212,98 @@ class GuildGearCheckerQt(QMainWindow):
             return
         if not Path(path).suffix:
             path += ".ggc"
-        try:
-            self.model.save(Path(path), backup=False)
-            self.refresh_project_label()
-            self.set_status(tr("checker.project_saved", name=Path(path).name))
-        except Exception as exc:
-            QMessageBox.critical(self, APP_NAME, tr("checker.project_save_error", error=exc))
+        if Path(path).suffix.casefold() != ".ggc":
+            QMessageBox.warning(self, APP_NAME, tr("clm_v2_init.require_ggc"))
+            return
+        self._save_identity_v2_project(Path(path), create_only=True)
+
+    def initialize_v2_from_clm(self) -> None:
+        if (self.project_mode == "identity_v2"
+                and self.identity_v2_store is not None
+                and self.identity_v2_store.pointMode != POINT_MODE_ETERNAL):
+            return
+        existing = (self.identity_v2_store if self.project_mode == "identity_v2" else None)
+        existing_path = self.identity_v2_project_path if existing is not None else None
+        existing_signature = (self._v2_project_file_signature
+                              if existing is not None else None)
+        if existing is None and not self._confirm_discard():
+            return
+        project_root = str(Path(__file__).resolve().parents[1])
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from app.clm_v2_initialization_ui import run_clm_v2_initialization
+
+        def commit_characters(store) -> None:
+            store, _repaired_count = self._repair_v2_individual_graves(store)
+            self.identity_v2_project_path = existing_path
+            self._v2_project_file_signature = existing_signature
+            self.identity_v2_store = store
+            self._set_project_mode("identity_v2")
+            self._apply_v2_character_store(store)
+            self.clm_path_edit.setText(store.clmLuaPath or "")
+            self.v2_character_data_page.set_store(store, reset_filters=True)
+            self.set_status("CLM-Charaktere übernommen; Raidimport kann später fortgesetzt werden.")
+
+        result = run_clm_v2_initialization(
+            self, target_store=existing, on_characters_imported=commit_characters)
+        if result is not None and (self.identity_v2_store is None
+                                   or result.to_payload() != self.identity_v2_store.to_payload()):
+            result, _repaired_count = self._repair_v2_individual_graves(result)
+            self._apply_v2_character_store(result)
+            self.clm_path_edit.setText(result.clmLuaPath or "")
+            self.clm_roster_combo.clear()
+            self._restore_v2_clm_roster_selection()
+            self.v2_character_data_page.set_store(result)
+            self.set_status("CLM-Raids übernommen. Projekt zum Speichern ausdrücklich sichern.")
+
+    def adopt_identity_v2_project(self, store, path: Path | str | None = None) -> None:
+        """Install one validated V2 project without reading its .ggc again."""
+        from app.identity_v2_views import IdentityV2ViewData
+
+        store.validate()
+        store, repaired_count = self._repair_v2_individual_graves(store)
+        view_data = IdentityV2ViewData.from_store(store)
+        self._v2_matrix_cache.clear()
+        self._v2_attendance_adapter = None
+        self._v2_raid_point_projection = None
+        self._v2_raid_point_error = None
+        self._reset_v2_clm_runtime()
+        self._invalidate_project_handoff()
+        self.identity_v2_store = store
+        self.identity_v2_project_path = Path(path).resolve() if path is not None else None
+        self._v2_project_file_signature = self._v2_file_signature(
+            self.identity_v2_project_path)
+        self._v2_raid_point_signature = None
+        from app.project_catalog import ProjectCatalog
+        lua = store.clmLuaPath
+        migrated_clm_path = False
+        if lua is None and self.identity_v2_project_path is not None:
+            previous_lua = ProjectCatalog(self._suite_settings_path).get_clm_path(
+                self.identity_v2_project_path)
+            lua = str(previous_lua) if previous_lua is not None else None
+            if lua is not None:
+                store.clmLuaPath = lua
+                migrated_clm_path = True
+        self.clm_path_edit.setText(lua or "")
+        self.clm_roster_combo.clear()
+        self.v2_raid_page.set_view_data(view_data)
+        self.v2_players_page.set_store(store, reset_filters=True)
+        self.v2_character_data_page.set_store(store, reset_filters=True)
+        self._set_v2_attendance_store(store, reset_order=True)
+        self._invalidate_raid_views()
+        self.csv_v2_import_plan = None
+        self.csv_v2_review_choices = {}
+        self.identity_v2_dirty = bool(repaired_count or migrated_clm_path)
+        self._set_project_mode("identity_v2")
+        if path is not None:
+            self.set_status(
+                tr("identity_v2_graveyard.repair_applied", count=repaired_count)
+                if repaired_count else tr("checker.project_loaded", name=Path(path).name))
+
+    def _open_identity_v2_project(self, path: Path | str) -> None:
+        from app.identity_v2_storage import load_identity_v2
+
+        self.adopt_identity_v2_project(load_identity_v2(path), path)
 
     def open_project(self) -> None:
         if not self._confirm_discard():
@@ -10110,43 +12312,456 @@ class GuildGearCheckerQt(QMainWindow):
         if not path:
             return
         try:
-            project = Path(path)
-            recovery = newer_autosave(project)
-            if recovery is not None and QMessageBox.question(
-                self, APP_NAME,
-                tr("checker.autosave_recovery_question", name=project.name),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            ) == QMessageBox.StandardButton.Yes:
-                payload = json.loads(recovery.read_text(encoding="utf-8-sig"))
-                self.model.load_payload(payload, project.resolve())
-                self.model.dirty = True
-            else:
-                self.model.load(project)
-            migration = migrate_legacy_portraits(project, self.model.members)
-            self.model.portrait_migration_summary = migration
-            if migration.ambiguous_names:
-                QMessageBox.warning(
-                    self, APP_NAME,
-                    tr(
-                        "checker.portrait_migration_ambiguous",
-                        names=", ".join(migration.ambiguous_names),
-                    ),
-                )
-            self._reset_project_services()
-            self._invalidate_project_handoff()
-            self._apply_character_cache_once()
-            self.autosave()
-            self.selected_member_id = None
-            self.set_member_tab("Gildenliste", refresh=False)
-            self.switch_page("rooster", refresh=False)
-            self.refresh_all(select_first=True)
-            self.set_status(tr("checker.project_loaded", name=Path(path).name))
+            self._open_identity_v2_project(path)
+            from app.project_catalog import ProjectCatalog
+            ProjectCatalog(self._suite_settings_path).mark_opened(
+                path, self.identity_v2_store)
         except Exception as exc:
             QMessageBox.critical(self, APP_NAME, tr("checker.project_load_error", error=exc))
 
+    def analyze_v2_csv_files(self) -> None:
+        if self.project_mode != "identity_v2" or self.identity_v2_store is None:
+            return
+        paths, _filter = QFileDialog.getOpenFileNames(
+            self, tr("csv_v2_analysis.select_files"), "",
+            "Warcraft Logs Casts CSV (*.csv)",
+        )
+        if not paths:
+            return
+        self.csv_v2_import_plan = None
+        self.csv_v2_review_choices = {}
+        try:
+            from app.csv_v2_analysis import analyze_csv_raids_for_v2
+            from app.csv_v2_analysis_ui import CsvV2AnalysisDialog
+            from app.identity_v2_views import IdentityV2ViewData
+
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                plan = analyze_csv_raids_for_v2(self.identity_v2_store, paths)
+            finally:
+                QApplication.restoreOverrideCursor()
+            dialog = CsvV2AnalysisDialog(plan, self, store=self.identity_v2_store)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            if dialog.result_store is not None:
+                if dialog.result_store.to_payload() == self.identity_v2_store.to_payload():
+                    self.set_status(tr("csv_v2_analysis.no_changes"))
+                    return
+                view_data = IdentityV2ViewData.from_store(dialog.result_store)
+                self.identity_v2_store = dialog.result_store
+                self.v2_raid_page.set_view_data(view_data)
+                self._set_v2_attendance_store(dialog.result_store)
+                self.v2_players_page.set_store(dialog.result_store)
+                self.v2_character_data_page.set_store(dialog.result_store)
+                self.identity_v2_dirty = True
+                self.csv_v2_import_plan = None
+                self.csv_v2_review_choices = {}
+                self.refresh_project_label()
+                self.set_status(tr(
+                    "csv_v2_analysis.applied",
+                    raids=dialog.result_summary.new_raids,
+                    attendance=dialog.result_summary.new_attendance,
+                ))
+                return
+            self.csv_v2_import_plan = plan
+            self.csv_v2_review_choices = dict(dialog.selections)
+            self.set_status(tr("csv_v2_analysis.ready", count=len(plan.raid_candidates)))
+        except Exception as exc:
+            QMessageBox.critical(self, tr("csv_v2_analysis.title"), str(exc))
+
+    def _set_v2_attendance_store(self, store, *, reset_order: bool = False) -> None:
+        from app.identity_v2_attendance_adapter import V2AttendanceAdapter
+
+        self._v2_attendance_adapter = V2AttendanceAdapter(store)
+        self._v2_matrix_cache.clear()
+        self._raid_view_dirty["raids"] = True
+        self._raid_view_dirty["dkp_history"] = True
+        self._set_v2_raid_point_store(store)
+        if reset_order:
+            self._v2_matrix_order.clear()
+        if self.project_mode == "identity_v2":
+            self._populate_matrix_subjects()
+            if self.stack.currentWidget() is self._pages["raid"]:
+                current = self.raid_subtabs.currentWidget()
+                if current is self.raids_page:
+                    self.refresh_raids()
+                elif current is self.dkp_history_page:
+                    self._populate_dkp_history_subjects()
+                elif current is self.point_history_page:
+                    self._populate_point_history_subjects()
+                elif current is self.attendance_page:
+                    self.refresh_raid_matrix()
+
+    def _set_v2_raid_point_store(self, store, *, force: bool = False) -> None:
+        from app.identity_v2_raid_points import (
+            V2RaidPointProjection, point_source_signature,
+        )
+        from app.raid_points import RaidPointsError
+
+        if store.pointMode != POINT_MODE_RAID:
+            self._v2_raid_point_projection = None
+            self._v2_raid_point_signature = None
+            self._v2_raid_point_error = None
+            self.v2_character_data_page.set_point_projection(None)
+            self.v2_players_page.set_point_projection(None)
+            self.v2_raid_page.adjust_points_button.setEnabled(False)
+            self.v2_raid_page.show_points_button.setEnabled(False)
+            self.v2_raid_page.points_status_label.clear()
+            self._refresh_v2_dkp_projection()
+            return
+        signature = point_source_signature(store)
+        if not force and signature == self._v2_raid_point_signature:
+            self._refresh_v2_dkp_projection()
+            return
+        try:
+            projection = V2RaidPointProjection(store)
+            error = None
+        except RaidPointsError as exc:
+            projection, error = None, str(exc)
+        self._v2_raid_point_projection = projection
+        self._v2_raid_point_signature = signature
+        self._v2_raid_point_error = error
+        self.v2_character_data_page.set_point_projection(projection, error)
+        self.v2_players_page.set_point_projection(projection, error)
+        self.v2_raid_page.adjust_points_button.setEnabled(projection is not None)
+        self.v2_raid_page.show_points_button.setEnabled(projection is not None)
+        self.v2_raid_page.points_status_label.setText(error or "")
+        self._refresh_v2_dkp_projection()
+        if (self.project_mode == "identity_v2"
+                and self.stack.currentWidget() is self._pages["raid"]
+                and self.raid_subtabs.currentWidget() is self.point_history_page):
+            self._populate_point_history_subjects()
+
+    def _refresh_v2_dkp_projection(self) -> None:
+        store = self.identity_v2_store
+        if store is None:
+            self._v2_dkp_projection = None
+        else:
+            from app.identity_v2_dkp import (
+                IdentityV2DkpProjection, available_dkp_by_member,
+            )
+
+            snapshot = self._v2_dkp_snapshot
+            if self._v2_dkp_cache_project_path != self.identity_v2_project_path:
+                snapshot = None
+            self._v2_current_dkp_by_member_id = (
+                available_dkp_by_member(store, snapshot.balances)
+                if snapshot is not None else {}
+            )
+            self._v2_dkp_projection = IdentityV2DkpProjection(
+                store,
+                available_by_member=self._v2_current_dkp_by_member_id,
+                raid_points_projection=self._v2_raid_point_projection,
+                refreshed_at=snapshot.refreshed_at if snapshot is not None else None,
+                registry=self._reward_registry,
+            )
+        for page_name in ("v2_roster_page", "v2_players_page", "v2_character_data_page"):
+            page = getattr(self, page_name, None)
+            setter = getattr(page, "set_dkp_projection", None)
+            if callable(setter):
+                setter(self._v2_dkp_projection)
+        self._sync_v2_point_presentation()
+        if self.project_mode == "identity_v2":
+            self._refresh_v2_roster_projection()
+
+    def _sync_v2_point_presentation(self) -> None:
+        store = self.identity_v2_store
+        if store is None:
+            return
+        for page in (self.v2_roster_page, self.v2_players_page,
+                     self.v2_character_data_page):
+            page.set_active_point_system(store.pointMode)
+        raid_visible = self._v2_point_presentation().shows("raid_points")
+        self.raid_points_button.setVisible(raid_visible)
+        for widget in (
+                self.v2_raid_page.adjust_points_button,
+                self.v2_raid_page.show_points_button,
+                self.v2_raid_page.rebuild_points_button,
+                self.v2_raid_page.points_status_label):
+            widget.setVisible(raid_visible)
+        if self.project_mode != "identity_v2":
+            return
+        history_index = self.raid_subtabs.indexOf(self.point_history_page)
+        if history_index >= 0:
+            self.raid_subtabs.setTabText(
+                history_index, tr("identity_v2_raid_points.history_tab"))
+            if not raid_visible and self.raid_subtabs.currentWidget() is self.point_history_page:
+                self.raid_subtabs.setCurrentWidget(self.attendance_page)
+            self.raid_subtabs.setTabVisible(history_index, raid_visible)
+        dkp_index = self.raid_subtabs.indexOf(self.dkp_history_page)
+        if dkp_index < 0:
+            dkp_index = self.raid_subtabs.addTab(
+                self.dkp_history_page, tr("dkp_history.tab"))
+        dkp_visible = self._v2_point_presentation().shows("dkp_rank")
+        if not dkp_visible and self.raid_subtabs.currentWidget() is self.dkp_history_page:
+            self.raid_subtabs.setCurrentWidget(self.attendance_page)
+        self.raid_subtabs.setTabVisible(dkp_index, dkp_visible)
+
+    def set_v2_active_point_system(self, mode: str) -> bool:
+        """Change only V2 pointMode; reuse existing point projections."""
+        from app.identity_v2_point_presentation import ActivePointPresentation
+
+        ActivePointPresentation(mode)
+        store = self.identity_v2_store
+        if self.project_mode != "identity_v2" or store is None:
+            return False
+        if store.pointMode == mode:
+            return False
+        changed = copy.deepcopy(store)
+        changed.pointMode = mode
+        changed.validate()
+        self.identity_v2_store = changed
+        self.identity_v2_dirty = True
+        self.v2_players_page.set_store(changed)
+        self.v2_character_data_page.set_store(changed)
+        self._set_v2_raid_point_store(changed, force=True)
+        self._sync_v2_point_presentation()
+        self._refresh_v2_roster_projection()
+        if (self.stack.currentWidget() is self._pages["raid"]
+                and self.raid_subtabs.currentWidget() is self.raids_page):
+            self.refresh_raid_participants()
+        self._sync_point_mode_controls(mode)
+        self._update_feature_controls()
+        self.refresh_project_label()
+        return True
+
+    def _refresh_v2_roster_projection(self) -> None:
+        from app.identity_v2_roster import build_v2_roster_items
+
+        store = self.identity_v2_store
+        self._v2_roster_items = (
+            build_v2_roster_items(
+                store, self.identity_v2_project_path,
+                self._v2_raid_point_projection, self._v2_dkp_projection,
+                self._reward_registry,
+                attendance_adapter=self._v2_attendance_adapter,
+            ) if store is not None else ()
+        )
+        if store is not None:
+            self.v2_roster_page.set_active_point_system(store.pointMode)
+            presentation = self._v2_point_presentation()
+            chosen_sort = self.v2_roster_sort.currentData()
+            blocked_sort = self.v2_roster_sort.blockSignals(True)
+            self.v2_roster_sort.clear()
+            for label, key in (
+                    (tr("roster.column_name"), "name"),
+                    (tr("roster.column_class"), "class"),
+                    (tr("checker.raid_role"), "raid_role"),
+                    (tr("roster.column_gear"), "gear"),
+                    (tr("identity_v2_views.raid_rank"), "raid_rank"),
+                    (tr("identity_v2_views.dkp_rank"), "dkp_rank")):
+                if presentation.shows(key):
+                    self.v2_roster_sort.addItem(label, key)
+            sort_index = self.v2_roster_sort.findData(chosen_sort)
+            self.v2_roster_sort.setCurrentIndex(max(0, sort_index))
+            self.v2_roster_sort.blockSignals(blocked_sort)
+        self._v2_roster_by_id = {item.memberId: item for item in self._v2_roster_items}
+        chosen = self.v2_roster_class_filter.currentData()
+        blocked = self.v2_roster_class_filter.blockSignals(True)
+        self.v2_roster_class_filter.clear()
+        self.v2_roster_class_filter.addItem(tr("identity_v2_views.all_classes"), None)
+        if any(item.className is None for item in self._v2_roster_items):
+            self.v2_roster_class_filter.addItem(
+                tr("identity_v2_views.unknown_class"), "__unknown__")
+        for class_name in sorted({item.className for item in self._v2_roster_items
+                                  if item.className}, key=str.casefold):
+            self.v2_roster_class_filter.addItem(class_name, class_name)
+        index = self.v2_roster_class_filter.findData(chosen)
+        self.v2_roster_class_filter.setCurrentIndex(max(0, index))
+        self.v2_roster_class_filter.blockSignals(blocked)
+        self._roster_cards_dirty = True
+        self._roster_list_dirty = True
+        if (self.project_mode == "identity_v2"
+                and self.stack.currentWidget() is self._pages["rooster"]):
+            self._refresh_current_roster_view()
+        elif (self.project_mode == "identity_v2"
+              and self.stack.currentWidget() is self.player_profile_page
+              and self._player_profile is not None):
+            current = self._player_profile
+            profile = self._build_player_profile(
+                current.player_id, current.selected_member_id)
+            if profile is not None:
+                self._player_profile = profile
+                self._render_player_profile(profile)
+
+    def _open_v2_point_history(self, level: str, identifier: str) -> bool:
+        if (self.project_mode != "identity_v2" or level not in ("player", "character")
+                or self.identity_v2_store is None
+                or self.identity_v2_store.pointMode != POINT_MODE_RAID
+                or self._v2_raid_point_projection is None):
+            return False
+        index = self.point_history_mode.findData(level)
+        self.point_history_mode.setCurrentIndex(index)
+        self.switch_page("identity_v2_points")
+        subject_index = self.point_history_subject.findData(identifier)
+        if subject_index >= 0:
+            self.point_history_subject.setCurrentIndex(subject_index)
+        return subject_index >= 0
+
+    def _rebuild_v2_raid_points(self) -> bool:
+        if (self.project_mode != "identity_v2" or self.identity_v2_store is None
+                or self.identity_v2_store.pointMode != POINT_MODE_RAID):
+            return False
+        self._set_v2_raid_point_store(self.identity_v2_store, force=True)
+        if self._v2_raid_point_error is not None:
+            self.points_status_label.setText(self._v2_raid_point_error)
+            QMessageBox.warning(self, tr("raid_points.title"),
+                                self._v2_raid_point_error)
+            return False
+        message = tr("identity_v2_raid_points.rebuilt")
+        self.points_status_label.setText(message)
+        self.set_status(message)
+        return True
+
+    def _adjust_v2_raid_points(self) -> bool:
+        if (self.project_mode != "identity_v2" or self.identity_v2_store is None
+                or self.identity_v2_store.pointMode != POINT_MODE_RAID
+                or self._v2_raid_point_projection is None):
+            return False
+        from app.identity_v2_raid_points import (
+            V2PointDialogModel, apply_v2_raid_point_adjustments,
+        )
+        selected = self._selected_raid()
+        raid_id = (selected.id if selected is not None
+                   and self.stack.currentWidget() is self._pages["raid"]
+                   and self.raid_subtabs.currentWidget() is self.raids_page
+                   else self.v2_raid_page.selected_raid_id())
+        raid = next((item for item in self._v2_raid_point_projection.raids
+                     if item.id == raid_id), None)
+        if raid is None:
+            return False
+        source, path = self.identity_v2_store, self.identity_v2_project_path
+        source_payload = source.to_payload()
+        dialog = RaidPointAdjustmentDialog(
+            self, V2PointDialogModel(source, self._v2_raid_point_projection), raid)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return False
+        if (self.identity_v2_store is not source
+                or self.identity_v2_project_path != path
+                or source.to_payload() != source_payload):
+            QMessageBox.warning(self, tr("raid_points.title"),
+                                tr("identity_v2_raid_points.stale"))
+            return False
+        try:
+            result = apply_v2_raid_point_adjustments(source, dialog.adjustment_values())
+        except ValueError as exc:
+            QMessageBox.warning(self, tr("raid_points.title"), str(exc))
+            return False
+        if result is source:
+            return False
+        self._apply_v2_points_store(result)
+        if self.raid_subtabs.currentWidget() is self.raids_page:
+            self.refresh_raid_participants()
+        return True
+
+    def _apply_v2_points_store(self, store) -> None:
+        if (self.project_mode != "identity_v2" or store.pointMode != POINT_MODE_RAID):
+            return
+        self.identity_v2_store = store
+        self.v2_players_page.set_store(store)
+        self.v2_character_data_page.set_store(store)
+        self._set_v2_raid_point_store(store)
+        self.identity_v2_dirty = True
+        self.refresh_project_label()
+
+    def _apply_v2_player_store(self, store) -> None:
+        if self.project_mode != "identity_v2":
+            return
+        from app.identity_v2_views import IdentityV2ViewData
+
+        view_data = IdentityV2ViewData.from_store(store)
+        self.identity_v2_store = store
+        self.v2_raid_page.set_view_data(view_data)
+        self._set_v2_attendance_store(store)
+        self.v2_character_data_page.set_store(store)
+        self.identity_v2_dirty = True
+        self.refresh_project_label()
+
+    def _apply_v2_character_store(self, store) -> None:
+        if self.project_mode != "identity_v2":
+            return
+        from app.identity_v2_views import IdentityV2ViewData
+
+        previous = self.identity_v2_store
+        if (previous is not None and previous.raidPoints != store.raidPoints
+                and previous.players == store.players
+                and previous.members == store.members
+                and previous.raids == store.raids
+                and previous.attendance == store.attendance
+                and previous.raidCreditResolutions == store.raidCreditResolutions
+                and previous.eternalDkpRecords == store.eternalDkpRecords
+                and previous.legacyClmGuidMemberMap == store.legacyClmGuidMemberMap
+                and previous.ignoredCsvCharacterNames == store.ignoredCsvCharacterNames
+                and previous.ignoredClmCharacterGroups == store.ignoredClmCharacterGroups
+                and previous.nextPlayerNumber == store.nextPlayerNumber
+                and previous.nextMainHistoryNumber == store.nextMainHistoryNumber
+                and previous.pointMode == store.pointMode
+                and previous.guildName == store.guildName
+                and previous.realm == store.realm):
+            self._apply_v2_points_store(store)
+            return
+
+        def grave_state(current):
+            return tuple((item.memberId, item.name, item.className, item.race,
+                          item.lifeStatus, item.deathDate, item.burialType,
+                          item.graveTemplateId)
+                         for item in current.members if item.lifeStatus == "dead")
+
+        graveyard_changed = previous is None or grave_state(previous) != grave_state(store)
+        view_data = IdentityV2ViewData.from_store(store)
+        self.identity_v2_store = store
+        self.v2_raid_page.set_view_data(view_data)
+        self._set_v2_attendance_store(store)
+        self.v2_players_page.set_store(store)
+        self.identity_v2_dirty = True
+        self.refresh_project_label()
+        if graveyard_changed:
+            self.refresh_graveyard()
+
+    def _save_identity_v2_project(self, target: Path, *, create_only: bool = False) -> None:
+        store = self.identity_v2_store
+        if self.project_mode != "identity_v2" or store is None:
+            return
+        if (self.identity_v2_project_path is not None
+                and target.resolve() == self.identity_v2_project_path
+                and self._v2_file_signature(target) != self._v2_project_file_signature):
+            QMessageBox.warning(self, APP_NAME,
+                                tr("identity_v2_graveyard.external_save_conflict"))
+            return
+        try:
+            project_root = str(Path(__file__).resolve().parents[1])
+            if project_root not in sys.path:
+                sys.path.insert(0, project_root)
+            from app.identity_v2_storage import save_identity_v2, save_new_identity_v2
+
+            previous_project_path = self.identity_v2_project_path
+            saved = (save_new_identity_v2(store, target) if create_only
+                     else save_identity_v2(store, target))
+            self.identity_v2_project_path = saved.resolve()
+            if (self._v2_dkp_snapshot is not None
+                    and self._v2_dkp_cache_project_path == previous_project_path):
+                self._v2_dkp_cache_project_path = self.identity_v2_project_path
+            self.v2_character_data_page.set_project_path(self.identity_v2_project_path)
+            self._v2_project_file_signature = self._v2_file_signature(saved)
+            self.identity_v2_dirty = False
+            from app.project_catalog import ProjectCatalog
+            refs = ProjectCatalog(self._suite_settings_path)
+            refs.mark_opened(saved, store)
+            self.refresh_project_label()
+            self._refresh_v2_roster_projection()
+            self.set_status(tr("checker.project_saved", name=saved.name))
+        except Exception as exc:
+            QMessageBox.critical(self, APP_NAME, tr("checker.project_save_error", error=exc))
+
     def save_project(self) -> None:
+        if self.project_mode == "identity_v2":
+            if self.identity_v2_project_path is None:
+                self.save_project_as()
+            else:
+                self._save_identity_v2_project(self.identity_v2_project_path)
+            return
         if not self.model.project_path:
-            self.save_project_as()
+            self.new_project()
             return
         try:
             self.model.save(self.model.project_path, backup=True)
@@ -10157,27 +12772,51 @@ class GuildGearCheckerQt(QMainWindow):
             QMessageBox.critical(self, APP_NAME, tr("checker.project_save_error", error=exc))
 
     def save_project_as(self) -> None:
-        initial = self.model.project_path.name if self.model.project_path else "Stitches_Gilde.ggc"
-        path, _filter = QFileDialog.getSaveFileName(self, tr("checker.save_project_title"), initial, "Guild Gear Checker (*.ggc)")
-        if not path:
+        if self.project_mode == "identity_v2":
+            initial = (self.identity_v2_project_path.name
+                       if self.identity_v2_project_path else "Neue_Gilde_V2.ggc")
+            path, _filter = QFileDialog.getSaveFileName(
+                self, tr("checker.save_project_title"), initial,
+                "Guild Gear Checker (*.ggc)",
+            )
+            if path:
+                target = Path(path if Path(path).suffix else path + ".ggc")
+                if target.suffix.casefold() != ".ggc":
+                    QMessageBox.warning(self, APP_NAME, tr("clm_v2_init.require_ggc"))
+                    return
+                self._save_identity_v2_project(target)
             return
-        if not Path(path).suffix:
-            path += ".ggc"
-        try:
-            target = Path(path)
-            old_project = self.model.project_path
-            copy_project_portraits(old_project, target)
-            self.model.save(target, backup=True)
-            if old_project is None or old_project.resolve() != target.resolve():
-                self._invalidate_project_handoff()
-            self.autosave()
-            self.refresh_project_label()
-            self.set_status(tr("checker.project_saved", name=Path(path).name))
-        except Exception as exc:
-            QMessageBox.critical(self, APP_NAME, tr("checker.project_save_error", error=exc))
+        if self.model.project_path is None:
+            self.new_project()
+            return
+        QMessageBox.information(
+            self, APP_NAME, tr("identity_v2_project.new_saves_v2_only"))
 
     def export_project(self) -> None:
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M")
+        if self.project_mode == "identity_v2":
+            store = self.identity_v2_store
+            if store is None:
+                return
+            from app.identity_v2_storage import save_new_identity_v2
+
+            base = (self.identity_v2_project_path.stem
+                    if self.identity_v2_project_path else "Identity_V2")
+            path, _filter = QFileDialog.getSaveFileName(
+                self, tr("checker.export_project_title"),
+                f"{base}_Export_{stamp}.ggc", "Guild Gear Checker (*.ggc)")
+            if not path:
+                return
+            try:
+                target = Path(path if Path(path).suffix else path + ".ggc")
+                if target.suffix.casefold() != ".ggc":
+                    raise ValueError(tr("clm_v2_init.require_ggc"))
+                save_new_identity_v2(store, target)
+                QMessageBox.information(self, APP_NAME, tr("checker.export_success"))
+            except Exception as exc:
+                QMessageBox.critical(
+                    self, APP_NAME, tr("checker.export_error", error=exc))
+            return
         base = self.model.project_path.stem if self.model.project_path else "Stitches_Gilde"
         path, _filter = QFileDialog.getSaveFileName(
             self, tr("checker.export_project_title"), f"{base}_Export_{stamp}.ggc", "Guild Gear Checker (*.ggc)"
@@ -10197,6 +12836,40 @@ class GuildGearCheckerQt(QMainWindow):
             self.model.project_path, self.model.dirty = old_path, old_dirty
 
     def export_project_with_portraits(self) -> None:
+        if self.project_mode == "identity_v2":
+            store, project = self.identity_v2_store, self.identity_v2_project_path
+            if store is None or project is None:
+                QMessageBox.warning(
+                    self, APP_NAME,
+                    tr("checker.package_export_requires_saved_project"))
+                return
+            if self._v2_file_signature(project) != self._v2_project_file_signature:
+                QMessageBox.warning(
+                    self, APP_NAME,
+                    tr("identity_v2_graveyard.external_save_conflict"))
+                return
+            from app.identity_v2_package import create_v2_project_package
+
+            suggested = project_package_default_filename(project)
+            path, _filter = QFileDialog.getSaveFileName(
+                self, tr("checker.package_export_title"), suggested, "ZIP (*.zip)")
+            if not path:
+                return
+            try:
+                target = Path(path if Path(path).suffix else path + ".zip")
+                summary = create_v2_project_package(store, project, target)
+                QMessageBox.information(
+                    self, tr("checker.package_export_title"),
+                    tr("checker.package_export_success", path=summary.target,
+                       portraits=summary.portrait_count,
+                       historical=summary.historical_portrait_count,
+                       markers=summary.missing_marker_count,
+                       missing=summary.missing_portrait_count))
+            except Exception as exc:
+                QMessageBox.critical(
+                    self, tr("checker.package_export_title"),
+                    tr("checker.package_export_failed", error=exc))
+            return
         suggested = project_package_default_filename(self.model.project_path)
         path, _filter = QFileDialog.getSaveFileName(self, tr("checker.package_export_title"), suggested, "ZIP (*.zip)")
         if not path:
@@ -10244,27 +12917,49 @@ class GuildGearCheckerQt(QMainWindow):
             return
         if not Path(target).suffix:
             target += ".ggc"
+        from app.identity_v2_package import import_v2_project_package
+
         try:
-            summary = import_project_package(Path(source), Path(target))
-            self.model.load(summary.project_path)
-            self._reset_project_services()
-            self._invalidate_project_handoff()
-            self.selected_member_id = None
-            self.set_member_tab("Gildenliste", refresh=False)
-            self.switch_page("rooster")
-            self.refresh_all(select_first=True)
-            self.set_status(tr("checker.package_imported", name=summary.project_path.name))
+            summary = import_v2_project_package(Path(source), Path(target))
+            self._open_identity_v2_project(summary.project_path)
+            from app.project_catalog import ProjectCatalog
+            ProjectCatalog(self._suite_settings_path).mark_opened(
+                summary.project_path, self.identity_v2_store)
+            self.set_status(tr("checker.package_imported",
+                               name=summary.project_path.name))
         except Exception as exc:
             QMessageBox.critical(self, APP_NAME, tr("checker.package_import_failed", error=exc))
 
     def open_active_portrait_folder(self) -> None:
-        folder = project_portrait_root(self.model.project_path)
+        project_path = (self.identity_v2_project_path
+                        if self.project_mode == "identity_v2"
+                        else self.model.project_path)
+        folder = project_portrait_root(project_path)
         if folder is None:
             QMessageBox.information(self, APP_NAME, tr("checker.project_required"))
             return
         safe_open_folder(folder)
 
     def refresh_project_label(self) -> None:
+        if self.project_mode == "identity_v2":
+            self.banner_title.setText(tr("identity_v2_project.title"))
+            path = self.identity_v2_project_path
+            saved = path is not None
+            self.grabber_button.setEnabled(saved)
+            self.grabber_menu_action.setEnabled(saved)
+            self.portrait_folder_menu_action.setEnabled(saved)
+            self.package_export_menu_action.setEnabled(saved)
+            for action in (self.grabber_menu_action,
+                           self.portrait_folder_menu_action,
+                           self.package_export_menu_action):
+                action.setToolTip("" if saved else tr("checker.project_required"))
+            suffix = tr("checker.dirty_suffix") if self.identity_v2_dirty else ""
+            self.project_label.setText(tr(
+                "checker.project_label", name=path.name if path else "Identity V2",
+                dirty=suffix,
+            ))
+            self.project_label.setToolTip(str(path) if path else "")
+            return
         if hasattr(self, "banner_title"):
             self.banner_title.setText(self.model.guild_name or tr("checker.title"))
         if self.model.project_path:
@@ -10277,10 +12972,13 @@ class GuildGearCheckerQt(QMainWindow):
 
     # ---------- persistence / compatibility ----------
     def _load_autosave_or_seed(self) -> None:
-        # Autosaves remain untouched recovery files. Startup itself is always empty.
-        self.model.new_empty()
+        # Kept for existing callers; startup never replaces the leading V2 store.
+        if self.identity_v2_store is not None:
+            return
 
     def autosave(self) -> None:
+        if self.project_mode == "identity_v2":
+            return
         target = autosave_path(self.model.project_path)
         if target is None or not self.model.dirty:
             return
@@ -10320,6 +13018,8 @@ class GuildGearCheckerQt(QMainWindow):
 
     def _poll_project_handoff(self) -> None:
         """Apply project-scoped entity actions emitted by the Portrait Grabber."""
+        if self.project_mode == "identity_v2":
+            return
         try:
             project = self.model.project_path
             session_id = self._project_handoff_session_id
@@ -10364,6 +13064,26 @@ class GuildGearCheckerQt(QMainWindow):
         if not grabber.is_file():
             QMessageBox.critical(self, APP_NAME, tr("checker.grabber_missing", path=grabber))
             return
+        if self.project_mode == "identity_v2":
+            project = self.identity_v2_project_path
+            if project is None or self.identity_v2_dirty:
+                QMessageBox.warning(
+                    self, APP_NAME, tr("identity_v2_graveyard.save_before_grabber"))
+                return
+            try:
+                executable = Path(sys.executable)
+                if sys.platform.startswith("win") and executable.name.casefold() == "python.exe":
+                    pythonw = executable.with_name("pythonw.exe")
+                    if pythonw.is_file():
+                        executable = pythonw
+                subprocess.Popen(
+                    [str(executable), str(grabber), "--project", str(project)],
+                    cwd=str(app_base_dir()),
+                )
+                self.set_status(tr("checker.grabber_started"))
+            except Exception as exc:
+                QMessageBox.critical(self, APP_NAME, tr("checker.grabber_error", error=exc))
+            return
         try:
             if self.model.project_path and self.model.dirty:
                 self.model.save(self.model.project_path, backup=True)
@@ -10386,20 +13106,13 @@ class GuildGearCheckerQt(QMainWindow):
         except Exception as exc:
             QMessageBox.critical(self, APP_NAME, tr("checker.grabber_error", error=exc))
 
-    def launch_legacy_checker(self) -> None:
-        script = app_base_dir() / "app" / "GuildGearChecker.py"
-        try:
-            import subprocess
-            executable = Path(sys.executable)
-            pythonw = executable.with_name("pythonw.exe") if sys.platform.startswith("win") else executable
-            subprocess.Popen([str(pythonw if pythonw.exists() else executable), str(script)], cwd=str(app_base_dir()))
-        except Exception as exc:
-            QMessageBox.critical(self, APP_NAME, tr("checker.legacy_start_error", error=exc))
-
     def set_status(self, text: str) -> None:
         self.status_label.setText(str(text))
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        if self.project_mode == "identity_v2" and not self._confirm_discard():
+            event.ignore()
+            return
         self._graveyard_zoom_timer.stop()
         self._apply_graveyard_zoom()
         self._graveyard_zoom_save_timer.stop()
@@ -10418,6 +13131,13 @@ class GuildGearCheckerQt(QMainWindow):
             roster_zoom_percent=self._roster_zoom_percent,
             **{MANAGEMENT_COLUMN_WIDTHS_SETTING: management_widths,
                MANAGEMENT_COLUMN_ORDER_SETTING: self.member_table.column_order()},
+            **self.v2_players_page.layout_settings(),
+            **self.v2_character_data_page.layout_settings(),
+            identity_v2_matrix_level=self._v2_matrix_level,
+            identity_v2_matrix_grouping=self._v2_matrix_grouping,
+            identity_v2_matrix_colors=self._v2_matrix_colors,
+            identity_v2_matrix_fixed_widths=self._v2_matrix_fixed_widths,
+            identity_v2_matrix_column_widths=self._v2_matrix_column_widths,
         )
         event.accept()
 
@@ -10434,27 +13154,11 @@ def _write_startup_error(trace_text: str) -> Path | None:
 
 
 def main() -> int:
-    app = QApplication(sys.argv)
-    app.setApplicationName(APP_NAME)
-    app.setApplicationVersion(APP_VERSION)
-    app.setStyle("Fusion")
     try:
-        window = GuildGearCheckerQt()
-        window.show()
-        return app.exec()
-    except Exception:
-        import traceback
-        trace_text = traceback.format_exc()
-        log_path = _write_startup_error(trace_text)
-        print(trace_text, file=sys.stderr, flush=True)
-        detail = tr("checker.qt_start_error") + "\n\n" + trace_text
-        if log_path is not None:
-            detail += "\n" + tr("checker.error_log", path=log_path)
-        try:
-            QMessageBox.critical(None, f"{APP_NAME} - {tr('checker.startup_error_title')}", detail)
-        except Exception:
-            pass
-        return 1
+        from app.launcher_qt import main as launcher_main
+    except ImportError:
+        from launcher_qt import main as launcher_main  # type: ignore
+    return launcher_main()
 
 
 if __name__ == "__main__":

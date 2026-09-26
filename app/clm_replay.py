@@ -42,6 +42,11 @@ class LedgerReplayer(Protocol):
 Guid = tuple[object, ...]
 
 
+def guid_key(value: Guid) -> str:
+    """Use the same stable CLM GUID representation as Identity V2."""
+    return ":".join(str(part) for part in value)
+
+
 def _sequence(value: object) -> list[object]:
     if isinstance(value, Mapping):
         keys = sorted(key for key in value if isinstance(key, int))
@@ -260,6 +265,7 @@ class ClmLedgerReplayer:
             if profile is not None:
                 balances.append(ClmCharacterBalance(
                     profile.name, _display_number(roster.standings.get(guid, 0.0)),
+                    guid_key(guid),
                 ))
         balances.sort(key=lambda item: item.name.casefold())
         return LedgerReplayResult(

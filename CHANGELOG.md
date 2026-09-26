@@ -2,6 +2,15 @@
 
 Dieses Changelog hält den aktuellen Entwicklungsstand kompakt. Ältere Einzel-Release-Notes wurden aus dem Repository-Root entfernt; ihre Inhalte bleiben weiterhin vollständig über die Git-Historie nachvollziehbar.
 
+## 0.12.1 – Release
+
+- Neues Startmenü mit Projektverwaltung; Identity V2 ist der produktive Standard. Der Checker verwendet das neue V2-Roster und Spielerprofil ohne Legacy-, Neu- oder Qt/Tkinter-Umschalter.
+- CLM-Lua-Pfad, Datenbank und DKP-Roster sind je Gilde zugeordnet. Charaktere, Raids, DKP oder alle CLM-Daten lassen sich ausdrücklich aktualisieren.
+- Identity- und Raid-Reviews klären neue GUIDs, Teilnehmerabweichungen und Raid-Typen im jeweiligen Workflow. Bereits geklärte Identitäten bleiben beim Refresh erhalten; einzelne Raids können ausgeschlossen werden.
+- Spieler lassen sich als Ganzes inaktiv setzen und mit den vorherigen Charakterzuständen reaktivieren. Main-Zuordnung und Main-Historie bleiben erhalten; tote Charaktere bleiben tot.
+- Gemeinsame Raid-Typ-Erkennung für CLM, CSV und Raidpunkte: `AQ` wird als `AQ20` behandelt, `AQ40` benötigt einen eindeutigen Typ, `Azu`/`Azzuregos` zählen als World Boss und `Naxxramas` als `Naxx`.
+- Raid-, Tabellen- und Dialogoberflächen wurden verbessert. Gildenstammdaten, CLM-Kontext und verfügbare DKP werden zuverlässig verarbeitet.
+
 ## 0.11.3 – stabile Version
 
 - Raidpunkte können über alle Raids oder ab einem festgelegten Datum gewertet werden, inklusive Migration älterer Projektstände.

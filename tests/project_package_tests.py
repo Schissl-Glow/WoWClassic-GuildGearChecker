@@ -388,17 +388,111 @@ class ProjectPackageTests(unittest.TestCase):
         self.assertEqual((portraits / "keep.png").read_bytes(), b"keep-portrait")
 
 
+class IdentityV2PackageTests(unittest.TestCase):
+    def setUp(self):
+        from app.identity_v2 import IdentityV2Store, Member
+        from app.identity_v2_storage import save_new_identity_v2
+
+        directory = tempfile.TemporaryDirectory(prefix="ggc-v2-package-")
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.project = self.root / "Original.ggc"
+        self.store = IdentityV2Store(
+            members=[Member("m1", "Sorap", "Mage"),
+                     Member("m2", "Sorap", "Mage")],
+            pointMode="eternal_dkp",
+        )
+        save_new_identity_v2(self.store, self.project)
+        portraits = self.root / "portraits"
+        portraits.mkdir()
+        (portraits / "m1.png").write_bytes(b"portrait-one")
+        (portraits / "m2.png").write_bytes(b"portrait-two")
+
+    def test_v2_package_roundtrip_keeps_ids_assets_and_original_file(self):
+        from app.identity_v2_package import (
+            create_v2_project_package, import_v2_project_package,
+        )
+        from app.identity_v2_storage import load_identity_v2
+
+        before = self.project.read_bytes()
+        self.store.members[0].note = "Nur im Paket"
+        package = self.root / "v2.zip"
+        summary = create_v2_project_package(self.store, self.project, package)
+        self.assertEqual(summary.portrait_count, 2)
+        with zipfile.ZipFile(package) as archive:
+            self.assertEqual(set(archive.namelist()), {
+                "project.ggc", "manifest.json", "portraits/m1.png",
+                "portraits/m2.png"})
+            self.assertEqual(json.loads(archive.read("project.ggc"))["identityFormat"],
+                             "identity-v2")
+        target = self.root / "imported" / "Restored.ggc"
+        imported = import_v2_project_package(package, target)
+        self.assertEqual(imported.project_path, target.resolve())
+        self.assertEqual(load_identity_v2(target).to_payload(),
+                         self.store.to_payload())
+        self.assertEqual((target.parent / "portraits" / "m1.png").read_bytes(),
+                         b"portrait-one")
+        self.assertEqual((target.parent / "portraits" / "m2.png").read_bytes(),
+                         b"portrait-two")
+        self.assertEqual(self.project.read_bytes(), before)
+
+    def test_v2_import_refuses_existing_target_and_legacy_payload(self):
+        from app.GuildGearChecker import ProjectPackageError
+        from app.identity_v2_package import (
+            create_v2_project_package, import_v2_project_package,
+        )
+
+        package = self.root / "v2.zip"
+        create_v2_project_package(self.store, self.project, package)
+        target = self.root / "existing" / "Target.ggc"
+        target.parent.mkdir()
+        target.write_bytes(b"keep")
+        with self.assertRaises(ProjectPackageError):
+            import_v2_project_package(package, target)
+        self.assertEqual(target.read_bytes(), b"keep")
+        legacy_package = self.root / "legacy-payload.zip"
+        with (zipfile.ZipFile(package) as source,
+              zipfile.ZipFile(legacy_package, "w") as archive):
+            for name in source.namelist():
+                archive.writestr(
+                    name, json.dumps({"members": []}) if name == "project.ggc"
+                    else source.read(name))
+        fresh = self.root / "fresh" / "Target.ggc"
+        with self.assertRaises(ValueError):
+            import_v2_project_package(legacy_package, fresh)
+        self.assertFalse(fresh.exists())
+
+    def test_v2_import_rejects_paths_outside_member_portraits(self):
+        from app.identity_v2_package import (
+            create_v2_project_package, import_v2_project_package,
+        )
+
+        package = self.root / "v2.zip"
+        create_v2_project_package(self.store, self.project, package)
+        with zipfile.ZipFile(package, "a") as archive:
+            archive.writestr("portraits/../escape.png", b"escape")
+        target = self.root / "unsafe" / "Target.ggc"
+        with self.assertRaises(ValueError):
+            import_v2_project_package(package, target)
+        self.assertFalse(target.exists())
+        self.assertFalse((self.root / "escape.png").exists())
+
+
 def main():
     global g
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     args = parser.parse_args()
+    sys.path.insert(0, str(args.repo_root.resolve()))
     module_path = args.repo_root.resolve() / "app" / "GuildGearChecker.py"
     spec = importlib.util.spec_from_file_location("ggc_project_package_target", module_path)
     g = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = g
     spec.loader.exec_module(g)
-    suite = unittest.defaultTestLoader.loadTestsFromTestCase(ProjectPackageTests)
+    suite = unittest.TestSuite((
+        unittest.defaultTestLoader.loadTestsFromTestCase(ProjectPackageTests),
+        unittest.defaultTestLoader.loadTestsFromTestCase(IdentityV2PackageTests),
+    ))
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     return 0 if result.wasSuccessful() else 1
 

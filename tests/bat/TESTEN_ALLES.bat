@@ -165,6 +165,18 @@ set "TEST_ENTRY=tests/qt_checker_smoke.py"
 set "TEST_COMMAND=set QT_QPA_PLATFORM=offscreen ^&^& "%GGC_PYTHON%" -B -X utf8 "%REPO_ROOT%\tests\qt_checker_smoke.py""
 call :RUN_TEST "Qt-Offscreen-Smoke"
 
+set "TEST_ENTRY=tests/startmenu_phase1_tests.py"
+set "TEST_COMMAND="%GGC_PYTHON%" -B -X utf8 -m unittest tests.startmenu_phase1_tests"
+call :RUN_TEST "Startmenue Phase 1 und Identity V2"
+
+set "TEST_ENTRY=tests/launcher_ui_tests.py"
+set "TEST_COMMAND="%GGC_PYTHON%" -B -X utf8 -m unittest tests.launcher_ui_tests"
+call :RUN_TEST "Startmenue Launcher-UI"
+
+set "TEST_ENTRY=tests/clm_v2_initialization_ui_tests.py"
+set "TEST_COMMAND="%GGC_PYTHON%" -B -X utf8 -m unittest tests.clm_v2_initialization_ui_tests"
+call :RUN_TEST "CLM-Erstimport und Roster-Auswahl"
+
 set "TEST_ENTRY=tests/suite_tests.py --ui"
 set "TEST_COMMAND="%GGC_PYTHON%" -B -X utf8 "%REPO_ROOT%\tests\suite_tests.py" --ui"
 call :RUN_TEST "Tk-UI und Scroll-Smoke"

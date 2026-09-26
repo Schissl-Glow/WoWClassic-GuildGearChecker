@@ -168,7 +168,9 @@ def core_tests() -> None:
     # Der Hauptstarter verwendet Qt; der Tkinter-Checker bleibt separat als Legacy-Referenz.
     starter_g = (ROOT / "STARTEN_GuildGearChecker.bat").read_text(encoding="utf-8")
     starter_p = (ROOT / "STARTEN_PortraitGrabber.bat").read_text(encoding="utf-8")
-    assert "app\\GuildGearCheckerQt.py" in starter_g
+    assert "app\\launcher_qt.py" in starter_g
+    launcher_qt = (ROOT / "app" / "launcher_qt.py").read_text(encoding="utf-8")
+    assert "from app.GuildGearCheckerQt import GuildGearCheckerQt" in launcher_qt
     assert "import PySide6" in starter_g
     assert "app\\GuildPortraitGrabberQt.py" in starter_p
     assert "app\\GuildPortraitGrabber.py" not in starter_p

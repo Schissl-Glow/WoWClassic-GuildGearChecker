@@ -12,19 +12,17 @@ try:
     from .clm_models import ClmIntegrationError
     from .clm_replay import (
         _display_number, _entry_sort_key, _entry_uuid, _guid, _guid_list,
-        _inflate_config, _sequence,
+        _inflate_config, _sequence, guid_key,
     )
-    from .csv_import import normalize_csv_raid_type
-    from .raid_attendance import RAID_TYPES
+    from .raid_type_detection import detect_raid_type, raid_type_mentions
 except ImportError:
     from clm_matching import strip_realm_suffix  # type: ignore
     from clm_models import ClmIntegrationError  # type: ignore
     from clm_replay import (  # type: ignore
         _display_number, _entry_sort_key, _entry_uuid, _guid, _guid_list,
-        _inflate_config, _sequence,
+        _inflate_config, _sequence, guid_key,
     )
-    from csv_import import normalize_csv_raid_type  # type: ignore
-    from raid_attendance import RAID_TYPES  # type: ignore
+    from raid_type_detection import detect_raid_type, raid_type_mentions  # type: ignore
 
 
 Guid = tuple[object, ...]
@@ -38,10 +36,6 @@ def _guids(value: object) -> list[Guid]:
         return values
     single = _guid(value)
     return [single] if single is not None else []
-
-
-def guid_key(value: Guid) -> str:
-    return ":".join(str(part) for part in value)
 
 
 def local_raid_date(timestamp: int) -> str:
@@ -64,19 +58,9 @@ def classify_manual_dkp(text: object, value: float) -> str:
 
 
 def detected_raid_types(name: object) -> tuple[str, ...]:
-    text = str(name or "").strip()
-    direct = normalize_csv_raid_type(text, RAID_TYPES)
-    if direct:
-        return (direct,)
-    folded = text.casefold()
-    aliases = (
-        ("Onyxia", ("onyxia", "ony")), ("AQ20", ("aq20", "aq")),
-        ("ZG", ("zulgurub", "zul'gurub", "zul gurub", "zg")),
-        ("MC", ("molten core", "mc")), ("BWL", ("blackwing lair", "bwl")),
-        ("AQ40", ("aq40",)), ("Naxx", ("naxxramas", "naxx")),
-    )
-    found = [raid_type for raid_type, values in aliases if any(value in folded for value in values)]
-    return tuple(dict.fromkeys(found))
+    if detect_raid_type(name) is None:
+        return ()
+    return tuple(raid_type for _position, raid_type in raid_type_mentions(name))
 
 
 def _roster_scoped_entries(ledger: object, roster_id: str) -> list[Mapping[object, object]]:

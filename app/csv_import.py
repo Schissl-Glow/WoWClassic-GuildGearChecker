@@ -10,31 +10,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+try:
+    from .raid_type_detection import detect_raid_type
+except ImportError:
+    from raid_type_detection import detect_raid_type  # type: ignore
+
 
 SUPPORTED_CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
+CANONICAL_CLASSES = (
+    "Druid", "Hunter", "Mage", "Paladin", "Priest", "Rogue",
+    "Shaman", "Warlock", "Warrior",
+)
 CSV_METADATA_KEYS = {
     "META_RAID_TYPE": "raid_type",
     "META_RAID_DATE": "raid_date",
     "META_REPORT_URL": "report_url",
 }
-CSV_RAID_TYPE_ALIASES = {
-    "zulgurub": "zg",
-    "zul'gurub": "zg",
-    "zul gurub": "zg",
-    "molten core": "mc",
-    "blackwing lair": "bwl",
-    "worldboss": "world boss",
-    "world boss": "world boss",
-    "azuregos": "world boss",
-    "lord kazzak": "world boss",
-    "kazzak": "world boss",
-    "emeriss": "world boss",
-    "lethon": "world boss",
-    "taerar": "world boss",
-    "ysondre": "world boss",
-}
-
-
 @dataclass(frozen=True)
 class RaidCsvMetadata:
     raid_type: str | None = None
@@ -47,6 +38,7 @@ class RaidCsvImport:
     names: tuple[str, ...]
     duplicates: tuple[str, ...]
     metadata: RaidCsvMetadata
+    classes_by_name: tuple[tuple[str, str], ...] = ()
 
 
 RAID_CASTS_FILENAME_PATTERN = re.compile(
@@ -71,7 +63,7 @@ def decode_csv_bytes(raw: bytes) -> str:
 
 
 def normalize_csv_raid_type(value: object, valid_raid_types: Iterable[str]) -> str | None:
-    """Resolve an exact CSV value or explicit alias to an existing raid type."""
+    """Resolve CSV metadata and multi-raid titles through the shared detector."""
     text = unicodedata.normalize("NFC", str(value or "").strip())
     if not text:
         return None
@@ -83,8 +75,8 @@ def normalize_csv_raid_type(value: object, valid_raid_types: Iterable[str]) -> s
     key = exact_name_key(text)
     if key in canonical_by_key:
         return canonical_by_key[key]
-    alias_target = CSV_RAID_TYPE_ALIASES.get(key)
-    return canonical_by_key.get(alias_target) if alias_target else None
+    detected = detect_raid_type(text)
+    return canonical_by_key.get(exact_name_key(detected)) if detected else None
 
 
 def raid_csv_filename_metadata(path: Path | str) -> RaidCsvMetadata:
@@ -146,9 +138,16 @@ def detect_raid_csv(text: str) -> RaidCsvImport:
     )
     if name_index is None:
         raise ValueError("Spalte 'Name' wurde nicht gefunden.")
+    class_index = next(
+        (index for index, header in enumerate(headers)
+         if header.casefold() in {"class", "klasse"}), None,
+    )
+    canonical_classes = {value.casefold(): value for value in CANONICAL_CLASSES}
     seen: set[str] = set()
     result: list[str] = []
     duplicates: list[str] = []
+    classes: dict[str, str] = {}
+    conflicting_classes: set[str] = set()
     for row in rows[1:]:
         if row and str(row[0]).lstrip("\ufeff").strip().upper().startswith("META_"):
             continue
@@ -158,12 +157,22 @@ def detect_raid_csv(text: str) -> RaidCsvImport:
         key = exact_name_key(name)
         if not name:
             continue
+        if class_index is not None and class_index < len(row):
+            candidate_class = canonical_classes.get(exact_name_key(row[class_index]))
+            if candidate_class and key not in conflicting_classes:
+                previous_class = classes.get(key)
+                if previous_class and previous_class != candidate_class:
+                    classes.pop(key, None)
+                    conflicting_classes.add(key)
+                else:
+                    classes[key] = candidate_class
         if key in seen:
             duplicates.append(name)
             continue
         seen.add(key)
         result.append(name)
-    return RaidCsvImport(tuple(result), tuple(duplicates), metadata)
+    return RaidCsvImport(tuple(result), tuple(duplicates), metadata,
+                         tuple(classes.items()))
 
 
 def detect_csv_name_details(text: str) -> tuple[list[str], list[str]]:

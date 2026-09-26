@@ -379,6 +379,10 @@ class RaidAttendanceTests(unittest.TestCase):
         self.model.update_member_assignment(
             former_main.id, player.playerId, "twink", "not_set",
         )
+        stored = next(entry for entry in self.model.raid_attendance
+                      if entry.memberId == former_main.id)
+        self.assertEqual((stored.playerId, stored.attendanceType),
+                         (former_player.playerId, "main"))
 
         stats = self.model.attendance_statistics_for_player(player.playerId)
         former_stats = self.model.attendance_statistics_for_player(former_player.playerId)
@@ -738,6 +742,59 @@ class RaidAttendanceTests(unittest.TestCase):
             raid_domain.RAID_TYPES,
             ("ZG", "AQ20", "MC", "BWL", "AQ40", "Naxx", "Onyxia", "World Boss"),
         )
+
+    def test_shared_raid_type_aliases_and_title_order(self):
+        from app.raid_type_detection import detect_raid_type
+
+        expected = {
+            "Naxxramas": "Naxx", "nAxXrAmAs": "Naxx", "Naxx 40": "Naxx",
+            "Molten Core": "MC", "Blackwing Lair": "BWL",
+            "Zul Gurub": "ZG", "Zul'Gurub": "ZG", "Zul-Gurub": "ZG",
+            "ZulGurub": "ZG",
+            "AQ": "AQ20", "AQ20": "AQ20", "AQ 20": "AQ20",
+            "Ruins of Ahn'Qiraj": "AQ20",
+            "Ruins of AhnQiraj": "AQ20", "AQ40": "AQ40", "AQ 40": "AQ40",
+            "Temple of Ahn'Qiraj": "AQ40", "Temple of AhnQiraj": "AQ40",
+            "Ony": "Onyxia", "Onyxia's Lair": "Onyxia",
+            "Onyxias Lair": "Onyxia",
+            "Worldboss": "World Boss", "Azu": "World Boss",
+            "Azzuregos": "World Boss", "Azuregos": "World Boss",
+            "Lord Kazzak": "World Boss", "Kazzak": "World Boss",
+            "Emeriss": "World Boss", "Lethon": "World Boss",
+            "Taerar": "World Boss", "Ysondre": "World Boss",
+            "Dragons of Nightmare": "World Boss",
+            "Teremus": "World Boss", "Teremus the Devourer": "World Boss",
+            "Ony / MC": "MC", "Ony_MC": "MC", "ZG nach Ony/MC": "ZG",
+            "Ony / ZG / AQ20": "ZG", "Azuregos + MC": "MC",
+            "AQ40 & ZG": "AQ40", "AQ40 + ZG": "AQ40",
+            "Kazzak / Naxxramas": "Naxx", "Kazzak + Naxxramas": "Naxx",
+            "MC / ZG": "MC", "ZG / MC": "ZG",
+            "AQ + ZG": "AQ20", "ZG + AQ": "ZG",
+            "AQ & MC": "AQ20", "MC / AQ": "MC",
+            "Ony / AQ": "AQ20", "Azu + ZG": "ZG",
+            "Azu, AQ, ZG": "AQ20", "Azu, ZG, AQ": "ZG",
+            "Azu + Ony": "World Boss", "ZG + AQ40": "ZG",
+            "17.10 AQ+ZG": "AQ20",
+            "AQ & ZG 31.10.2025": "AQ20",
+            "Azu, AQ, ZG 14.11.": "AQ20",
+            "Azu 28.11.2025": "World Boss",
+            "2026-01-30 AQ20": "AQ20", "2026-01-30 ZG": "ZG",
+        }
+        for title, canonical in expected.items():
+            with self.subTest(title=title):
+                self.assertEqual(detect_raid_type(title), canonical)
+                self.assertEqual(
+                    csv_import.normalize_csv_raid_type(title, raid_domain.RAID_TYPES),
+                    canonical)
+        for title in ("Unknown Future Raid", "Naxxish", "AQish"):
+            with self.subTest(title=title):
+                self.assertIsNone(detect_raid_type(title))
+                self.assertIsNone(csv_import.normalize_csv_raid_type(
+                    title, raid_domain.RAID_TYPES))
+        self.assertEqual(raid_domain.raid_category("Naxxramas"), "40er")
+        self.assertEqual(raid_domain.raid_category("Zul'Gurub"), "20er")
+        self.assertEqual(raid_domain.raid_category("AQ"), "20er")
+        self.assertEqual(raid_domain.raid_category("Azu"), "World Boss")
 
     def test_bulk_csv_import_adds_two_and_skips_existing_without_mutation(self):
         main, _player = self.add_main("Bífi")

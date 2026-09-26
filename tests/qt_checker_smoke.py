@@ -29,6 +29,13 @@ from app.rewards import RewardAsset, RewardAssignments
 
 
 class SmokeWindow(GuildGearCheckerQt):
+    def __init__(self) -> None:
+        super().__init__()
+        # Exercise the retained widget adapter; normal startup is V2-only.
+        self._set_project_mode("legacy")
+        self._load_autosave_or_seed()
+        self.refresh_all()
+
     def _load_autosave_or_seed(self) -> None:
         self.model.new_empty()
         first = self.model.add_member("QtSmoke", "Smoke")
@@ -80,10 +87,44 @@ assert adjust_dialog.table.cellWidget(0, 5).minimumWidth() >= 170
 adjust_dialog.close()
 adjust_dialog.deleteLater()
 
-assert list(window._pages) == [
-    "rooster", "player_profile", "graveyard", "management", "raid", "settings",
-]
-assert list(window._nav_buttons) == ["rooster", "graveyard", "management", "raid", "settings"]
+main_pages = ("rooster", "graveyard", "management", "raid", "settings")
+v2_pages = (
+    "identity_v2", "identity_v2_raid",
+    "identity_v2_players", "identity_v2_character_data",
+)
+assert list(window._nav_buttons) == list(main_pages)
+assert set(main_pages) | {"player_profile", *v2_pages} <= window._pages.keys()
+assert all(window.stack.indexOf(window._pages[key]) >= 0
+           for key in (*main_pages, "player_profile", *v2_pages))
+assert window.stack.count() == len(window._pages)
+assert window.roster_content_stack.indexOf(window.v2_roster_page) >= 0
+for page in main_pages:
+    window.switch_page(page, refresh=False)
+    assert window.stack.currentWidget() is window._pages[page]
+window._set_project_mode("identity_v2")
+try:
+    assert {key for key, button in window._nav_buttons.items() if button.isEnabled()} == {
+        "rooster", "graveyard", "management", "raid", "settings",
+    }
+    for route, target in (
+        ("rooster", "rooster"),
+        ("identity_v2_roster", "rooster"),
+        ("graveyard", "graveyard"),
+        ("management", "identity_v2_players"),
+        ("identity_v2_character_data", "identity_v2_character_data"),
+        ("raid", "raid"),
+        ("settings", "settings"),
+        ("identity_v2", "identity_v2"),
+        ("identity_v2_matrix", "raid"),
+        ("identity_v2_points", "raid"),
+    ):
+        window.switch_page(route, refresh=False)
+        assert window.stack.currentWidget() is window._pages[target]
+        if route == "raid":
+            assert window.raid_subtabs.currentWidget() is window.raids_page
+finally:
+    window._set_project_mode("legacy")
+    window.switch_page("rooster", refresh=False)
 assert window.stack.currentWidget() is window._pages["rooster"]
 assert window.project_label.text() == "Kein Projekt geladen"
 assert window.project_label.toolTip() == ""
@@ -117,7 +158,7 @@ app.processEvents()
 assert window.stack.currentWidget() is window._pages["management"]
 assert window.member_tab == "Gildenliste"
 assert window.member_table.rowCount() == 1
-assert window.member_table.columnCount() == 11
+assert window.member_table.columnCount() == len(MemberTable.COLUMNS) == 12
 window.set_member_tab("Alle Charaktere")
 app.processEvents()
 assert window.member_table.rowCount() == 2

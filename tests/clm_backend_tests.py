@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 from types import SimpleNamespace
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -19,7 +20,9 @@ from app.clm_models import (
     ClmCharacterBalance, ClmDatabaseDescriptor, ClmIntegrationError, ClmRosterDescriptor,
 )
 from app.clm_replay import ClmLedgerReplayer, LedgerReplayRequest
-from app.clm_refresh import ClmDkpRefreshService
+from app.clm_refresh import ClmDkpRefreshService, ClmRosterSelectionRequired
+from app.identity_v2 import IdentityV2Store, Member
+from app.identity_v2_dkp import available_dkp_by_member
 from app.clm_savedvariables import (
     SavedVariablesParseError, load_saved_variables, parse_saved_variable,
 )
@@ -106,6 +109,16 @@ class ClmBackendTests(unittest.TestCase):
         self.assertEqual(result.point_type, 0)
         self.assertTrue(result.active)
         self.assertEqual(len(result.balances), 5)
+        self.assertEqual(len({balance.clm_guid for balance in result.balances}), 5)
+        self.assertTrue(all(balance.clm_guid for balance in result.balances))
+        self.assertTrue(all(isinstance(balance.clm_guid, str)
+                            and ":" in balance.clm_guid
+                            for balance in result.balances))
+        first_balance = result.balances[0]
+        store = IdentityV2Store(members=[Member(
+            "m1000", "Test", "Mage", clmGuid=first_balance.clm_guid)])
+        self.assertEqual(available_dkp_by_member(store, result.balances),
+                         {"m1000": first_balance.points})
         self.assertEqual(result.ignored_entries, 1)
         self.assertEqual(balances, {
             "Waltørdin": 629,
@@ -160,6 +173,44 @@ class ClmBackendTests(unittest.TestCase):
                 project_realm="stitches",
             )
         self.assertIs(service.cached_snapshot, snapshot)
+
+    def test_project_refresh_resolves_saved_name_without_falling_back(self):
+        fixture = REPO_ROOT / "tests" / "fixtures" / "clm_replay_verified.lua"
+        service = ClmDkpRefreshService()
+        expected = service.refresh_for_project(
+            fixture, project_guild_name="Bierstube", project_realm="Stitches")
+        restored = service.refresh_for_project(
+            fixture, project_guild_name="Bierstube", project_realm="Stitches",
+            requested_roster_name=expected.roster_name)
+        self.assertEqual(restored.roster_id, expected.roster_id)
+        with self.assertRaises(ClmRosterSelectionRequired):
+            service.refresh_for_project(
+                fixture, project_guild_name="Bierstube", project_realm="Stitches",
+                requested_roster_name="Anderes Roster")
+        self.assertIs(service.cached_snapshot, restored)
+
+    def test_explicit_database_and_parsed_document_refresh(self):
+        fixture = REPO_ROOT / "tests" / "fixtures" / "clm_replay_verified.lua"
+        document = load_saved_variables(fixture)
+        service = ClmDkpRefreshService()
+        with patch("app.clm_refresh.load_saved_variables",
+                   side_effect=AssertionError("Lua erneut gelesen")):
+            snapshot = service.refresh_from_document(
+                document, database_id="exp0 alliance stitches bierstube",
+                roster_id="1730228604")
+        self.assertEqual(snapshot.roster_id, "1730228604")
+        self.assertIs(service.cached_snapshot, snapshot)
+        selected = service.refresh_for_project(
+            fixture, project_guild_name="Bierstube", project_realm="Stitches",
+            requested_database_id=snapshot.database_id,
+            requested_roster_id=snapshot.roster_id)
+        self.assertEqual(selected.balances, snapshot.balances)
+        with self.assertRaises(ClmIntegrationError):
+            service.refresh_for_project(
+                fixture, project_guild_name="Andere Gilde", project_realm="Stitches",
+                requested_database_id=snapshot.database_id,
+                requested_roster_id=snapshot.roster_id)
+        self.assertIs(service.cached_snapshot, selected)
 
 
 if __name__ == "__main__":

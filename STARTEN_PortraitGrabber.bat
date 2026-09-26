@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title Guild Portrait Grabber v0.11.3 - Qt
+title Guild Portrait Grabber v0.12.1 - Qt
 
 call "%~dp0tools\_FIND_QT_PYTHON.cmd"
 if not defined GGC_QT_PYTHON goto :NO_QT_PYTHON
@@ -12,7 +12,7 @@ set "PYTHONPATH="
 set "QT_PLUGIN_PATH="
 
 echo ============================================================
-echo   Guild Portrait Grabber v0.11.3 - Qt
+echo   Guild Portrait Grabber v0.12.1 - Qt
 echo ============================================================
 echo.
 "%GGC_QT_PYTHON%" "%~dp0app\GuildPortraitGrabberQt.py" %*

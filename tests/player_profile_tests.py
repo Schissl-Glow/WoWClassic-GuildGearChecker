@@ -240,57 +240,41 @@ class PlayerProfileQtTests(unittest.TestCase):
             self.window = Window()
         self.addCleanup(self.window.close)
 
-    def test_parallel_views_share_projection_selection_and_raid_rows(self):
+    def test_new_profile_keeps_projection_selection_and_raid_rows(self):
         from PySide6.QtCore import Qt
         main_raid = self.window.model.create_raid("2026-09-01", "Mainraid")
         self.window.model.import_raid_attendance(main_raid.id, [self.window.main.name])
         twink_raid = self.window.model.create_raid("2026-09-08", "Twinkraid")
         self.window.model.import_raid_attendance(twink_raid.id, [self.window.twink.name])
         self.window.open_player_profile(self.window.player.playerId)
-        classic = self.window.player_profile_page
-        draft = classic.draft_page
-        self.assertEqual(classic.variant_stack.currentIndex(), 1)
-        self.assertTrue(classic.variant_buttons.button(1).isChecked())
-        self.window._build_player_profile = Mock(side_effect=AssertionError("No reload on view/character switch"))
+        page = self.window.player_profile_page
+        draft = page.draft_page
+        self.assertFalse(hasattr(page, "variant_stack"))
+        self.assertFalse(hasattr(page, "variant_buttons"))
+        self.assertIs(page.layout().itemAt(0).widget(), draft)
+        self.window._build_player_profile = Mock(side_effect=AssertionError("No reload on character switch"))
         self.window._clm_refresh_service.refresh = Mock(side_effect=AssertionError("No CLM refresh"))
-        snapshot = self.window._player_profile
-        for page in (classic, draft):
-            header = page.character_raid_table.horizontalHeader()
-            self.assertTrue(all(
-                header.sectionResizeMode(column).name == "Interactive"
-                for column in range(page.character_raid_table.columnCount())
-            ))
-        classic.character_raid_table.setColumnWidth(1, 333)
+        header = draft.character_raid_table.horizontalHeader()
+        self.assertTrue(all(
+            header.sectionResizeMode(column).name == "Interactive"
+            for column in range(draft.character_raid_table.columnCount())
+        ))
         draft.character_raid_table.setColumnWidth(1, 444)
         draft.character_raid_table.setCurrentCell(0, 0)
-        classic.variant_buttons.button(0).click()
-        self.assertEqual(classic.variant_stack.currentIndex(), 0)
         self.assertEqual(
-            classic.character_raid_table.currentItem().data(Qt.ItemDataRole.UserRole),
+            draft.character_raid_table.currentItem().data(Qt.ItemDataRole.UserRole),
             main_raid.id,
-        )
-        classic.character_raid_table.setCurrentCell(0, 0)
-        classic.variant_buttons.button(1).click()
-        self.assertEqual(classic.variant_stack.currentIndex(), 1)
-        self.assertIs(self.window._player_profile, snapshot)
-        self.assertEqual(draft.character_raid_table.currentItem().data(Qt.ItemDataRole.UserRole), main_raid.id)
-        self.assertEqual(classic.character_raid_table.columnWidth(1), 333)
-        self.assertEqual(draft.character_raid_table.columnWidth(1), 444)
-        self.assertEqual(
-            {key: label.text() for key, label in classic.player_metric_labels.items()},
-            {key: label.text() for key, label in draft.player_metric_labels.items()},
         )
         draft.family_buttons[self.window.twink.id].click()
         self.assertEqual(self.window._player_profile.player_id, self.window.player.playerId)
         self.assertEqual(self.window._player_profile.selected_member_id, self.window.twink.id)
-        for page in (classic, draft):
-            self.assertEqual(page.character_combo.currentData(), self.window.twink.id)
-            self.assertEqual(page.character_raid_table.item(0, 1).text(), "Twinkraid")
-        classic.variant_buttons.button(0).click()
-        self.assertEqual(self.window._player_profile.selected_member_id, self.window.twink.id)
-        self.assertEqual(classic.variant_stack.currentIndex(), 0)
+        self.assertEqual(draft.character_combo.currentData(), self.window.twink.id)
+        self.assertEqual(draft.character_raid_table.item(0, 1).text(), "Twinkraid")
+        self.assertEqual(draft.character_raid_table.columnWidth(1), 444)
         self.window._build_player_profile.assert_not_called()
         self.window._clm_refresh_service.refresh.assert_not_called()
+        self.window.close_player_profile()
+        self.assertIs(self.window.stack.currentWidget(), self.window._pages["rooster"])
 
     def test_draft_raids_are_beside_details_and_portrait_fits_all_frames(self):
         from PySide6.QtCore import QPoint, QSize
@@ -298,7 +282,6 @@ class PlayerProfileQtTests(unittest.TestCase):
         from app.rewards import FRAME_OPENING_RECTS
         self.window.open_player_profile(self.window.player.playerId)
         page = self.window.player_profile_page
-        page.variant_buttons.button(1).click()
         draft = page.draft_page
         self.window.resize(1040, 1050)
         self.window.show()

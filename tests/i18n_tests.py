@@ -43,7 +43,8 @@ class I18nTests(unittest.TestCase):
     def test_every_literal_translation_key_used_by_apps_exists(self):
         service = i18n.Translator()
         used = set()
-        for filename in ("GuildGearChecker.py", "GuildGearCheckerQt.py", "GuildPortraitGrabber.py"):
+        for filename in ("GuildGearChecker.py", "GuildGearCheckerQt.py",
+                         "GuildPortraitGrabber.py", "identity_v2_players_qt.py"):
             source = (repo_root / "app" / filename).read_text(encoding="utf-8")
             literal_keys = re.findall(r"\btr\([\"']([^\"']+)[\"']", source)
             # A key ending in a dot is a dynamic prefix, e.g. tr("life." + status).
@@ -72,6 +73,97 @@ class I18nTests(unittest.TestCase):
         self.assertEqual(en["raids"]["open_warcraft_logs"], "Open Warcraft Logs")
         self.assertEqual(de["alpha_editor"]["apply_save"], "Anwenden / Speichern")
         self.assertEqual(en["alpha_editor"]["apply_save"], "Apply / Save")
+
+    def test_v2_player_management_terms_are_bilingual(self):
+        service = i18n.Translator()
+        de = service._catalog("de")["identity_v2_players"]
+        en = service._catalog("en")["identity_v2_players"]
+        self.assertEqual(set(de), set(en))
+        self.assertEqual(de["title"], "Spielerdaten")
+        self.assertEqual(en["title"], "Player Data")
+        for key in ("filter_all", "filter_active", "filter_inactive",
+                    "filter_graveyard", "unknown", "main", "twinks", "active_characters",
+                    "inactive", "graveyard", "no_main", "create_player",
+                    "assign_existing", "reassign", "unassign", "set_main",
+                    "reactivate", "set_inactive", "bulk_create", "player_column",
+                    "deactivate_player", "reactivate_player",
+                    "confirm_deactivate_player", "confirm_reactivate_player",
+                    "main_column", "chars_column", "table_unknown_class", "raids",
+                    "first_raid", "last_raid"):
+            self.assertTrue(de[key] and en[key], key)
+        self.assertEqual(de["table_unknown_class"], "Unbekannt")
+        self.assertEqual(en["table_unknown_class"], "Unknown")
+        self.assertEqual(de["first_raid"], "Erster Raid")
+        self.assertEqual(en["first_raid"], "First raid")
+
+    def test_v2_character_data_table_and_detail_terms_are_bilingual(self):
+        service = i18n.Translator()
+        de = service._catalog("de")["identity_v2_character_data"]
+        en = service._catalog("en")["identity_v2_character_data"]
+        self.assertEqual(set(de), set(en))
+        for key in ("title", "search", "filter_all", "filter_active",
+                    "filter_inactive", "filter_graveyard", "show_details",
+                    "unknown_player", "unknown_class", "previous", "next",
+                    "column_dead", "detail_death_date", "save_note", "confirm_check",
+                    "edit_error_title", "edit_failed", "paste_error_title",
+                    "paste_out_of_range", "paste_protected", "mark_dead",
+                    "mark_dead_tooltip", "dead_since", "death_dialog_title",
+                    "death_dialog_message", "death_date", "confirm_death",
+                    "cancel_death", "death_conflict_title", "death_conflict",
+                    "burial", "burial_type", "burial_individual",
+                    "burial_collective", "change_burial", "burial_error_required",
+                    "burial_error_invalid", "burial_error_living"):
+            self.assertTrue(de[key] and en[key], key)
+        for key in ("successor_required_title", "successor_required",
+                    "choose_successor_title", "choose_successor_message",
+                    "successor_member_id", "apply_successor"):
+            self.assertTrue(de[key] and en[key], key)
+        self.assertEqual(de["column_dead"], "Tot")
+        self.assertEqual(en["column_dead"], "Dead")
+
+    def test_v2_cemetery_terms_are_bilingual(self):
+        service = i18n.Translator()
+        de = service._catalog("de")["identity_v2_graveyard"]
+        en = service._catalog("en")["identity_v2_graveyard"]
+        self.assertEqual(set(de), set(en))
+        for key in ("collective", "name", "class", "death_date", "player",
+                    "summary", "no_individual", "no_stone", "no_portrait",
+                    "grabber_tooltip", "save_before_grabber",
+                    "external_reload_failed", "external_save_conflict"):
+            self.assertTrue(de[key] and en[key], key)
+
+    def test_v2_main_history_editor_terms_are_bilingual(self):
+        service = i18n.Translator()
+        de = service._catalog("de")["identity_v2_main_history"]
+        en = service._catalog("en")["identity_v2_main_history"]
+        self.assertEqual(set(de), set(en))
+        for key in ("title", "title_short", "unknown", "current_main",
+                    "current_since", "current_open", "update_current_since",
+                    "column_character", "column_from", "column_to",
+                    "column_source", "column_reason", "column_conflict",
+                    "conflicts", "edit_entry", "character", "from_date", "to_date",
+                    "origin", "source_automatic", "source_manual", "reason_death",
+                    "reason_main_change", "reason_cleared", "reason_inactive",
+                    "reason_manual", "reason_unknown", "overlap",
+                    "overlap_tooltip", "new_entry", "add_entry", "update_entry",
+                    "remove_entry", "apply", "confirm_remove", "confirm_overlap",
+                    "stale_project", "invalid_range", "foreign_member",
+                    "no_current_main", "invalid_change", "finish_new_entry",
+                    "ownership_blocked"):
+            self.assertTrue(de[key] and en[key], key)
+
+    def test_v2_csv_review_controls_are_bilingual(self):
+        service = i18n.Translator()
+        de = service._catalog("de")["csv_v2_analysis"]
+        en = service._catalog("en")["csv_v2_analysis"]
+        self.assertEqual(set(de), set(en))
+        for key in ("import_enabled", "raid_type", "target", "v2_assignment",
+                    "participant_status", "status_csv_reimport", "status_disabled",
+                    "participant_existing_member", "participant_new",
+                    "participant_ambiguous", "participant_ignored",
+                    "participant_blocked", "participant_existing_attendance",
+                    "participant_clm_only", "no_changes"):
+            self.assertTrue(de[key] and en[key], key)
 
     def test_language_setting_survives_new_service_instance(self):
         with tempfile.TemporaryDirectory(prefix="ggc-i18n-") as temp:

@@ -10,6 +10,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable, Mapping
 
+try:
+    from .raid_attendance import raid_category
+except ImportError:
+    # GuildGearChecker.py also loads this module by file path for standalone use.
+    from guild_suite_raid_attendance import raid_category  # type: ignore
+
 
 BASE_POINTS_BY_STATUS = {"present": 10, "bench": 5}
 
@@ -73,6 +79,34 @@ class ManualRaidPointAdjustment:
         }
 
 
+@dataclass(frozen=True)
+class MemberRaidPointAdjustment:
+    """A standalone positive or negative special-point entry for one member ID."""
+
+    adjustment_id: str
+    member_id: str
+    value: int
+    reason: str
+
+    def __post_init__(self) -> None:
+        if (not isinstance(self.adjustment_id, str) or not self.adjustment_id.strip()
+                or not isinstance(self.member_id, str) or not self.member_id.strip()):
+            raise RaidPointsError("Sonderpunkte benötigen Anpassungs- und Member-ID.")
+        if isinstance(self.value, bool) or not isinstance(self.value, int) or self.value == 0:
+            raise RaidPointsError("Sonderpunkte benötigen eine ganze Zahl ungleich null.")
+        if not isinstance(self.reason, str) or not self.reason.strip():
+            raise RaidPointsError("Sonderpunkte benötigen eine Begründung.")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> "MemberRaidPointAdjustment":
+        return cls(data.get("adjustmentId"), data.get("memberId"),
+                   data.get("value"), data.get("reason"))
+
+    def to_dict(self) -> dict[str, object]:
+        return {"adjustmentId": self.adjustment_id, "memberId": self.member_id,
+                "value": self.value, "reason": self.reason}
+
+
 @dataclass
 class RaidPointState:
     enabled: bool = False
@@ -80,6 +114,7 @@ class RaidPointState:
     included_raid_ids: set[str] = field(default_factory=set)
     pending_raid_ids: set[str] = field(default_factory=set)
     adjustments: dict[str, ManualRaidPointAdjustment] = field(default_factory=dict)
+    member_adjustments: dict[str, MemberRaidPointAdjustment] = field(default_factory=dict)
     excluded_attendance_ids: set[str] = field(default_factory=set)
     calculation_mode: str | None = None
     calculation_start_date: str | None = None
@@ -93,9 +128,11 @@ class RaidPointState:
         raw_raid_ids = data.get("includedRaidIds", [])
         raw_pending_ids = data.get("pendingRaidIds", [])
         raw_adjustments = data.get("adjustments", [])
+        raw_member_adjustments = data.get("memberAdjustments", [])
         raw_excluded_ids = data.get("excludedAttendanceIds", [])
         if (not isinstance(raw_raid_ids, list) or not isinstance(raw_pending_ids, list)
                 or not isinstance(raw_adjustments, list)
+                or not isinstance(raw_member_adjustments, list)
                 or not isinstance(raw_excluded_ids, list)):
             raise RaidPointsError("Ungültige Raidpunkte-Konfiguration.")
         raw_enabled = data.get("enabled", False)
@@ -113,6 +150,14 @@ class RaidPointState:
                 raise RaidPointsError("Doppelte manuelle Raidpunkte-Anpassung.")
             if adjustment.value:
                 adjustments[adjustment.attendance_id] = adjustment
+        member_adjustments: dict[str, MemberRaidPointAdjustment] = {}
+        for raw in raw_member_adjustments:
+            if not isinstance(raw, Mapping):
+                raise RaidPointsError("Ungültige Member-Sonderpunkte.")
+            adjustment = MemberRaidPointAdjustment.from_dict(raw)
+            if adjustment.adjustment_id in member_adjustments:
+                raise RaidPointsError("Doppelte Member-Sonderpunkte-ID.")
+            member_adjustments[adjustment.adjustment_id] = adjustment
         mode = data.get("calculationMode")
         start = data.get("calculationStartDate")
         if mode is not None and mode not in {"all", "from_date"}:
@@ -125,6 +170,7 @@ class RaidPointState:
             included_raid_ids=included,
             pending_raid_ids=pending - included,
             adjustments=adjustments,
+            member_adjustments=member_adjustments,
             excluded_attendance_ids={
                 str(attendance_id).strip() for attendance_id in raw_excluded_ids
                 if str(attendance_id).strip()
@@ -147,6 +193,10 @@ class RaidPointState:
         if self.calculation_mode is not None:
             data["calculationMode"] = self.calculation_mode
             data["calculationStartDate"] = self.calculation_start_date
+        if self.member_adjustments:
+            data["memberAdjustments"] = [
+                self.member_adjustments[key].to_dict()
+                for key in sorted(self.member_adjustments)]
         return data
 
     def set_calculation_scope(self, mode: str, start_date: str | None = None) -> None:
@@ -224,6 +274,19 @@ class RaidPointState:
         else:
             self.adjustments.pop(adjustment.attendance_id, None)
 
+    def set_member_adjustment(self, adjustment_id: str, member_id: str,
+                              value: int, reason: str) -> None:
+        if not self.enabled:
+            raise RaidPointsError("Sonderpunkte sind bei deaktiviertem Punktesystem nicht zulässig.")
+        if value == 0:
+            self.member_adjustments.pop(adjustment_id, None)
+            return
+        adjustment = MemberRaidPointAdjustment(adjustment_id, member_id, value, reason)
+        current = self.member_adjustments.get(adjustment_id)
+        if current is not None and current.member_id != member_id:
+            raise RaidPointsError("Sonderpunkte dürfen nicht auf einen anderen Member übertragen werden.")
+        self.member_adjustments[adjustment_id] = adjustment
+
 
 @dataclass(frozen=True)
 class RaidPointEntry:
@@ -239,14 +302,23 @@ class RaidPointEntry:
     adjustment: int
     reason: str
     total_points: int
+    entry_kind: str = "attendance"
 
 
-def base_points_for_status(status: object) -> int:
+def base_points_for_status(status: object, raid_type: str | None = None) -> int:
     normalized = str(status or "").strip()
     try:
-        return BASE_POINTS_BY_STATUS[normalized]
+        base = BASE_POINTS_BY_STATUS[normalized]
     except KeyError as exc:
         raise RaidPointsError(f"Nicht unterstützter Attendance-Status: {normalized or '–'}") from exc
+    if raid_type is None:
+        return base
+    category = raid_category(raid_type)
+    if category in ("20er", "40er"):
+        return base
+    if category in ("Onyxia", "World Boss"):
+        return 5 if normalized == "present" else 0
+    raise RaidPointsError(f"Unbekannter Raidtyp für Raidpunkte: {raid_type or '–'}")
 
 
 def detect_point_conflicts(
@@ -281,14 +353,22 @@ def build_point_history(
     *,
     player_id: str | None = None,
     member_id: str | None = None,
+    member_ids: Iterable[str] | None = None,
+    rules: str = "legacy",
 ) -> tuple[RaidPointEntry, ...]:
-    if player_id is not None and member_id is not None:
+    if rules not in ("legacy", "v2"):
+        raise RaidPointsError("Unbekannte Raidpunkte-Regeln.")
+    if rules == "v2" and player_id is not None:
+        raise RaidPointsError("V2-Spielerpunkte benötigen aktuelle Member-IDs.")
+    selector_count = sum(value is not None for value in (player_id, member_id, member_ids))
+    if selector_count > 1:
         raise RaidPointsError("Spieler- und Charakterfilter dürfen nicht kombiniert werden.")
+    family_member_ids = {str(value) for value in member_ids} if member_ids is not None else None
     raids_by_id = {str(getattr(raid, "id", "")): raid for raid in raids}
     records = list(attendance)
-    conflicts = detect_point_conflicts(
+    conflicts = (detect_point_conflicts(
         records, state.included_raid_ids, state.excluded_attendance_ids,
-    )
+    ) if rules == "legacy" else ())
     if conflicts:
         raise RaidPointConflictError(conflicts)
 
@@ -309,10 +389,13 @@ def build_point_history(
             continue
         if member_id is not None and entry_member_id != member_id:
             continue
+        if family_member_ids is not None and entry_member_id not in family_member_ids:
+            continue
 
         raid = raids_by_id[raid_id]
         status = str(getattr(entry, "status", ""))
-        base_points = base_points_for_status(status)
+        base_points = base_points_for_status(
+            status, str(getattr(raid, "raidType", "")) if rules == "v2" else None)
         adjustment = state.adjustments.get(attendance_id)
         adjustment_value = adjustment.value if adjustment else 0
         result.append(RaidPointEntry(
@@ -327,8 +410,24 @@ def build_point_history(
             base_points=base_points,
             adjustment=adjustment_value,
             reason=adjustment.reason if adjustment else "",
-            total_points=max(0, base_points + adjustment_value),
+            total_points=(max(0, base_points + adjustment_value) if rules == "legacy"
+                          else base_points + adjustment_value),
         ))
+    if rules == "v2":
+        for adjustment in state.member_adjustments.values():
+            if (member_id is not None and adjustment.member_id != member_id
+                    or family_member_ids is not None
+                    and adjustment.member_id not in family_member_ids):
+                continue
+            result.append(RaidPointEntry(
+                attendance_id=adjustment.adjustment_id,
+                raid_id="", date="", raid_name="Sonderpunkte",
+                player_id="", member_id=adjustment.member_id,
+                character_name="", attendance_status="special",
+                base_points=0, adjustment=adjustment.value,
+                reason=adjustment.reason, total_points=adjustment.value,
+                entry_kind="special",
+            ))
     result.sort(key=lambda item: (item.date, item.raid_id, item.attendance_id))
     return tuple(result)
 

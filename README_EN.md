@@ -38,7 +38,7 @@ The current desktop client is based on **Python 3.12+ and PySide6/Qt** and is de
 
 ## Current Status
 
-- **Current stable version:** 0.11.3
+- **Current stable version:** 0.12.1
 - **Main branch:** `main`
 
 Details about changes are available in the [Changelog](CHANGELOG.md).

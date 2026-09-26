@@ -78,6 +78,7 @@ try:
         MANIFEST_FILENAME as GRAVESTONE_MANIFEST_FILENAME,
         SUPPORTED_IMAGE_EXTENSIONS as GRAVESTONE_SUPPORTED_IMAGE_EXTENSIONS,
         GravestoneInventory, generate_gravestone_manifest, load_gravestone_inventory,
+        choose_gravestone_template as _shared_choose_gravestone_template,
     )
     from app.raid_attendance import (
         ATTENDANCE_STATUSES, RAID_CATEGORIES, RAID_TYPES,
@@ -88,6 +89,15 @@ try:
         validate_membership_dates,
     )
 except ImportError:
+    # Direct file loading (suite_tests.py) has no "app" package on sys.path.
+    # Make the shared raid-type module available to both standalone fallbacks.
+    if "raid_type_detection" not in sys.modules:
+        _type_spec = importlib.util.spec_from_file_location(
+            "raid_type_detection", Path(__file__).resolve().with_name("raid_type_detection.py")
+        )
+        _type_module = importlib.util.module_from_spec(_type_spec)
+        sys.modules[_type_spec.name] = _type_module
+        _type_spec.loader.exec_module(_type_module)
     _csv_spec = importlib.util.spec_from_file_location(
         "guild_suite_csv_import", Path(__file__).resolve().with_name("csv_import.py")
     )
@@ -115,6 +125,7 @@ except ImportError:
     GravestoneInventory = _grave_module.GravestoneInventory
     generate_gravestone_manifest = _grave_module.generate_gravestone_manifest
     load_gravestone_inventory = _grave_module.load_gravestone_inventory
+    _shared_choose_gravestone_template = _grave_module.choose_gravestone_template
 
     _raid_spec = importlib.util.spec_from_file_location(
         "guild_suite_raid_attendance", Path(__file__).resolve().with_name("raid_attendance.py")
@@ -265,8 +276,10 @@ except ImportError:
     find_character_cache_record = _character_cache_module.find_character_cache_record
     load_character_cache = _character_cache_module.load_character_cache
 
-APP_NAME = "Guild Gear Checker"
-APP_VERSION = "0.11.3"
+try:
+    from app.app_info import APP_NAME, APP_VERSION
+except ImportError:
+    from app_info import APP_NAME, APP_VERSION  # type: ignore
 PROJECT_FORMAT = "GuildGearCheckerProject"
 PROJECT_FORMAT_VERSION = 4
 PROJECT_PACKAGE_FORMAT_VERSION = 1
@@ -674,16 +687,8 @@ def shifted_portrait_offsets(offset_x: object, offset_y: object, delta_x: float,
 
 def choose_gravestone_template(template_ids: Iterable[str], member_id: str,
                                previous_template: str | None = None) -> str:
-    available = tuple(template_ids)
-    if not available:
-        return ""
-    seed = sum((index + 1) * byte for index, byte in enumerate(
-        str(member_id).encode("utf-8", errors="replace")
-    ))
-    choice_index = seed % len(available)
-    if len(available) > 1 and available[choice_index] == previous_template:
-        choice_index = (choice_index + 1) % len(available)
-    return available[choice_index]
+    return _shared_choose_gravestone_template(
+        template_ids, member_id, previous_template)
 
 
 def graveyard_grid_layout(canvas_width: int, item_count: int) -> dict:
@@ -2080,9 +2085,14 @@ class GuildModel(_GuildModelState):
     def raid_point_history(
         self, *, player_id: str | None = None, member_id: str | None = None,
     ):
+        member_ids = None
+        if player_id is not None:
+            member_ids = {
+                member.id for member in self.members if member.playerId == player_id
+            }
         return build_point_history(
             self.raid_points, self.raids, self.raid_attendance,
-            player_id=player_id, member_id=member_id,
+            member_ids=member_ids, member_id=member_id,
         )
 
     def set_raid_attendance_status(self, raid_id: str, player_id: str, status: str) -> RaidAttendance:
@@ -2621,6 +2631,7 @@ class GuildModel(_GuildModelState):
         player = self.find_player_by_id(player_id)
         if player is None:
             raise ValueError(tr("model.player_not_found"))
+        # Existing attendance keeps its recorded Player even after a Member is reassigned.
         return calculate_statistics(
             player.playerId, self.raids, self.raid_attendance,
             self.attendance_tracking_start_date,
@@ -7300,7 +7311,7 @@ class GuildGearCheckerApp(tk.Tk):
 
 
 def run_self_tests() -> None:
-    assert APP_VERSION == "0.11.3"
+    assert APP_VERSION == "0.12.1"
     assert build_armory_url("Ánníe").endswith("/%C3%81nn%C3%ADe?game_version=classic1x")
     assert build_armory_url("Schlübbeer").endswith("/Schl%C3%BCbbeer?game_version=classic1x")
     assert norm_name(" Bífi ") == norm_name("bífi")

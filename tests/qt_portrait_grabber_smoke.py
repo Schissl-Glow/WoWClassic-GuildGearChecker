@@ -107,7 +107,7 @@ def assert_plain_payload(value) -> None:
     assert value is None or isinstance(value, (str, int, float, bool))
 
 
-assert APP_VERSION == "0.9.9"
+assert APP_VERSION == "0.12.0"
 application = QApplication.instance() or QApplication([])
 reused_application, owns_application = create_application([])
 assert reused_application is application
@@ -131,7 +131,7 @@ try:
     assert empty_window.crop_settings_group.title() == "Aufnahme & Ausschnitt"
     assert empty_window.playwright_crop_group.parent() is empty_window.crop_settings_group
     assert empty_window.standard_crop_group.parent() is empty_window.crop_settings_group
-    assert empty_window.banner.version_text == "v0.9.9"
+    assert empty_window.banner.version_text == "v0.12.0"
     assert "DEV" not in empty_window.windowTitle()
     assert not empty_window.banner._source.isNull()
     assert empty_window.checker_navigation_button.text() == "Im Gearchecker öffnen"

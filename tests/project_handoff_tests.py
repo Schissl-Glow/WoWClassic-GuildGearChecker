@@ -188,6 +188,7 @@ class ProjectHandoffTests(unittest.TestCase):
         )
         fake = SimpleNamespace(
             model=model,
+            project_mode="legacy",
             _project_handoff_session_id=session,
             _project_handoff_processed_tokens=set(),
             _grave_pixmaps={},

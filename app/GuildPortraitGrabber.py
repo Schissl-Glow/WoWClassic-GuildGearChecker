@@ -194,7 +194,7 @@ except ImportError:
     update_manifest_gravestone_category = _grave_category_module.update_manifest_gravestone_category
 
 APP_NAME = "Guild Portrait Grabber"
-APP_VERSION = "0.11.3"
+APP_VERSION = "0.12.1"
 DEFAULT_REGION = "EU"
 DEFAULT_REALM = "stitches"
 DEFAULT_GAME_VERSION = "classic1x"
@@ -2596,19 +2596,27 @@ class BrowserWorker(threading.Thread):
             str(record.get("characterName") or "").casefold(): record.get("memberId")
             for record in (character_records or [])
         }
+        ordered_records = (character_records or []) if len(character_records or []) == total else []
         for idx, name in enumerate(names, 1):
             if self._batch_cancel.is_set():
                 cancelled = True
                 break
             self.emit("batch_progress", index=idx, total=total, name=name)
             try:
+                aligned = ordered_records[idx - 1] if ordered_records else None
+                member_id = (
+                    aligned.get("memberId")
+                    if aligned is not None
+                    and str(aligned.get("characterName") or "").casefold() == name.casefold()
+                    else member_ids.get(name.casefold())
+                )
                 self._capture_character(
                     name=name, region=region, realm=realm, game_version=game_version,
                     preferred_channel=preferred_channel, wait_after_load=wait_after_load,
                     output_dir=output_dir, crop=crop, navigate=True,
                     capture_mode=capture_mode, screen_region=screen_region,
                     standard_wait_after_open=standard_wait_after_open,
-                    member_id=member_ids.get(name.casefold()),
+                    member_id=member_id,
                 )
                 successes += 1
             except BrowserBatchStopped:
@@ -5606,7 +5614,7 @@ def run_self_test() -> int:
             failures.append((name, exc))
             print(f"[FEHLER] {name}: {exc}")
 
-    check("Version", lambda: (_ for _ in ()).throw(AssertionError(APP_VERSION)) if APP_VERSION != "0.11.3" else None)
+    check("Version", lambda: (_ for _ in ()).throw(AssertionError(APP_VERSION)) if APP_VERSION != "0.12.1" else None)
     check("Armory-Gildenabruf deaktiviert", lambda: (_ for _ in ()).throw(AssertionError()) if LEGACY_GUILD_ROSTER_FETCH_ENABLED else None)
     check("URL + Unicode", lambda: (_ for _ in ()).throw(AssertionError("URL falsch")) if "%C3%81nn%C3%ADe" not in build_armory_url("Ánníe") else None)
     check("Dateiname Sonderzeichen", lambda: (_ for _ in ()).throw(AssertionError("Dateiname falsch")) if safe_filename('A:b?c*') != "A_b_c_" else None)

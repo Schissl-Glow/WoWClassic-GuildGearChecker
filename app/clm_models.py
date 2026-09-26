@@ -41,6 +41,7 @@ class ClmRosterDescriptor:
 class ClmCharacterBalance:
     name: str
     points: int | float
+    clm_guid: str | None = None
 
 
 @dataclass(frozen=True)

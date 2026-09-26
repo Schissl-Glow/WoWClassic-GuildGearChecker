@@ -59,6 +59,11 @@ from PIL import Image, ImageOps
 from PIL.ImageQt import ImageQt
 
 try:
+    from app.qt_row_hover import install_row_hover
+except ImportError:
+    from qt_row_hover import install_row_hover  # type: ignore
+
+try:
     from app.GuildGearChecker import (
         GRAVESTONE_CARD_SIZE,
         GRAVESTONE_PORTRAIT_ZOOM_RANGE,
@@ -225,7 +230,42 @@ except ImportError:  # Direkter Start über app\GuildPortraitGrabberQt.py
 
 
 APP_NAME = "Guild Portrait Grabber"
-APP_VERSION = "0.11.3"
+APP_VERSION = "0.12.1"
+GRABBER_INTERACTION_STYLE = """
+QPushButton, QToolButton {
+    background:#202a33; color:#f0dfbf; border:1px solid #4c5b68;
+    border-radius:4px; padding:4px 8px;
+}
+QPushButton:hover, QToolButton:hover {background:#263746; border-color:#8193a2;}
+QPushButton:pressed, QToolButton:pressed {background:#151f29; border-color:#8193a2;}
+QPushButton:disabled, QToolButton:disabled {
+    background:#171d24; color:#747e87; border-color:#2b333b;
+}
+QPushButton:focus, QToolButton:focus {border-color:#c7a265;}
+QTabBar::tab {
+    background:#171f28; color:#aeb8c2; border:1px solid #303b47;
+    border-top:2px solid transparent; padding:6px 10px;
+}
+QTabBar::tab:hover {background:#202d3b; color:#e0e9ef;}
+QTabBar::tab:selected {background:#202932; color:#f3e6cd; border-top-color:#c7a265;}
+QTabBar::tab:selected:hover {background:#202932; color:#f3e6cd;}
+QTabBar::tab:disabled {background:#151b22; color:#68727c;}
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+    background:#10161d; color:#e8edf1; border:1px solid #35414d;
+    border-radius:4px; padding:4px;
+}
+QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {
+    border-color:#6b7885;
+}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+    border-color:#c7a265;
+}
+QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {
+    background:#171d24; color:#747e87; border-color:#2b333b;
+}
+QTableView {selection-background-color:#302b22; selection-color:#f5dfb1; outline:0;}
+QHeaderView::section:hover {background:#293542; color:#f1d79f;}
+"""
 GRAVESTONE_CATEGORY_FILTER_ALL = "__all__"
 GRABBER_MINIMUM_SIZE = QSize(1050, 760)
 GRABBER_INITIAL_RATIO = 0.75
@@ -1482,6 +1522,7 @@ class GuildPortraitGrabberQt(QMainWindow):
                  worker_factory: Callable[[queue.Queue], object] | None = None,
                  config_data: dict | None = None) -> None:
         super().__init__()
+        self.setStyleSheet(GRABBER_INTERACTION_STYLE)
         self.project_path: Path | None = None
         self.project_payload: dict | None = None
         self.project_error: str | None = None
@@ -1489,6 +1530,8 @@ class GuildPortraitGrabberQt(QMainWindow):
         self.handoff_path: Path | None = None
         self._session_project_path: Path | None = None
         self.project_model: GuildModel | None = None
+        self.v2_mode = False
+        self.v2_store = None
         self.active_character_members: list[Member] = []
         self.inactive_character_members: list[Member] = []
         self.character_members: list[Member] = []
@@ -1511,6 +1554,7 @@ class GuildPortraitGrabberQt(QMainWindow):
         self._portrait_editor_dialog: PortraitEditorDialogQt | None = None
         self._gravestone_editor_dialog: GravestoneEditorDialogQt | None = None
         self._batch_names: list[str] = []
+        self._batch_member_ids: set[str] = set()
         self._batch_stop_requested = False
         self._worker_cancel_requested = False
         self._armory_url_full = ""
@@ -2051,6 +2095,7 @@ class GuildPortraitGrabberQt(QMainWindow):
 
         self.character_model = QStandardItemModel(0, 5, self)
         self.character_table = QTableView()
+        self.character_row_hover = install_row_hover(self.character_table)
         self.character_table.setObjectName("characterTable")
         self.character_table.setModel(self.character_model)
         self.character_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -2217,6 +2262,7 @@ class GuildPortraitGrabberQt(QMainWindow):
         splitter.setObjectName("graveyardSplitter")
         self.graveyard_model = QStandardItemModel(0, 5, self)
         self.graveyard_table = QTableView()
+        self.graveyard_row_hover = install_row_hover(self.graveyard_table)
         self.graveyard_table.setObjectName("graveyardTable")
         self.graveyard_table.setModel(self.graveyard_model)
         self.graveyard_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -2337,11 +2383,35 @@ class GuildPortraitGrabberQt(QMainWindow):
         try:
             paths = project_paths(project_path)
             payload = load_project_payload(paths.project)
-            model = GuildModel()
-            model.load_payload(payload, paths.project)
-            model.portrait_migration_summary = migrate_legacy_portraits(
-                paths.project, model.members,
-            )
+            v2_mode = isinstance(payload, dict) and payload.get("identityFormat") == "identity-v2"
+            if v2_mode:
+                root = str(Path(__file__).resolve().parents[1])
+                if root not in sys.path:
+                    sys.path.insert(0, root)
+                from app.identity_v2 import IdentityV2Store
+
+                store = IdentityV2Store.from_payload(payload)
+                model = GuildModel()
+                model.new_empty()
+                model.project_path = paths.project
+                model.members = [Member(
+                    id=item.memberId, name=item.name, race=item.race,
+                    className=item.className or "", spec=item.spec or "",
+                    lifeStatus=item.lifeStatus, deathDate=item.deathDate or "",
+                    graveTemplateId=item.graveTemplateId or "",
+                    portraitOffsetX=item.portraitOffsetX,
+                    portraitOffsetY=item.portraitOffsetY,
+                    portraitZoom=item.portraitZoom,
+                    textOffsetX=item.textOffsetX, textOffsetY=item.textOffsetY,
+                    textScale=item.textScale,
+                ) for item in store.members]
+            else:
+                store = None
+                model = GuildModel()
+                model.load_payload(payload, paths.project)
+                model.portrait_migration_summary = migrate_legacy_portraits(
+                    paths.project, model.members,
+                )
         except (OSError, TypeError, ValueError) as exc:
             self.project_error = str(exc)
             self.refresh_texts()
@@ -2360,6 +2430,12 @@ class GuildPortraitGrabberQt(QMainWindow):
         self.project_path = paths.project
         self.project_payload = payload
         self.project_model = model
+        self.v2_mode = v2_mode
+        self.v2_store = store
+        self.tabs.setTabEnabled(self.tabs.indexOf(self.portraits_page), True)
+        self.roster_actions_group.setVisible(not v2_mode)
+        if v2_mode:
+            self.tabs.setCurrentWidget(self.graveyard_page)
         self.project_error = None
         if project_changed:
             self.armory_results.clear()
@@ -2447,6 +2523,8 @@ class GuildPortraitGrabberQt(QMainWindow):
 
     def _add_working_names(self, names: Sequence[str]) -> int:
         """Ergänzt die Arbeitsliste exakt/casefold-basiert ohne Projektmutation."""
+        if self.v2_mode:
+            return 0
         current_names = [member.name for member in self.character_members]
         merged_names = dedupe_names([*current_names, *names])
         existing = {name.casefold() for name in current_names}
@@ -2571,6 +2649,8 @@ class GuildPortraitGrabberQt(QMainWindow):
 
     def _dispatch_project_action(self, action_type: str,
                                  data: dict) -> tuple[str, dict | None]:
+        if self.v2_mode:
+            raise ValueError(tr("identity_v2_project.legacy_disabled"))
         if self.project_path is None:
             raise ValueError(tr("grabber.project_required"))
         if self.session_id:
@@ -2614,6 +2694,8 @@ class GuildPortraitGrabberQt(QMainWindow):
         self._rebuild_character_model(selected_id)
 
     def save_guild_list(self) -> bool:
+        if self.v2_mode:
+            return False
         if self.project_path is None or self._pending_roster_save_token:
             if self.project_path is None:
                 QMessageBox.information(self, self.windowTitle(), tr("grabber.project_required"))
@@ -3138,10 +3220,12 @@ class GuildPortraitGrabberQt(QMainWindow):
         ]
 
     def _start_portrait_batch(self, names: list[str], title: str,
-                              overwrite_existing: bool) -> bool:
+                              overwrite_existing: bool, *,
+                              members: list[Member] | None = None) -> bool:
         if self._worker_closed or self._active_worker_action is not None:
             return False
-        names = dedupe_names(names)
+        names = ([member.name for member in members] if self.v2_mode and members is not None
+                 else dedupe_names(names))
         payload = self._capture_worker_payload()
         if payload is None or not names:
             return False
@@ -3161,13 +3245,18 @@ class GuildPortraitGrabberQt(QMainWindow):
             return False
 
         payload.update({
-            "character_records": self._batch_member_records(names),
+            "character_records": ([
+                {"memberId": member.id, "characterName": member.name}
+                for member in members
+            ] if self.v2_mode and members is not None else self._batch_member_records(names)),
         })
         self._active_worker_action = "capture_all"
         self._active_worker_member_id = None
         self._active_worker_project_path = self.project_path
         self._last_worker_event = None
         self._batch_names = list(names)
+        self._batch_member_ids = ({member.id for member in members}
+                                  if self.v2_mode and members is not None else set())
         self._batch_stop_requested = False
         self._worker_cancel_requested = False
         self.worker_error_label.clear()
@@ -3185,6 +3274,7 @@ class GuildPortraitGrabberQt(QMainWindow):
             [member.name for member in self.character_members],
             tr("grabber.create_all"),
             overwrite_existing=True,
+            members=list(self.character_members) if self.v2_mode else None,
         )
 
     def capture_missing_portraits(self) -> bool:
@@ -3193,10 +3283,14 @@ class GuildPortraitGrabberQt(QMainWindow):
         if self.project_path is None:
             self._capture_worker_payload()
             return False
-        names = missing_portrait_names(
-            [member.name for member in self.character_members], self.project_path,
-            {member.name.casefold(): member.id for member in self.character_members},
-        )
+        missing_members = ([member for member in self.character_members
+                            if self._portrait_file_for(member) is None]
+                           if self.v2_mode else None)
+        names = ([member.name for member in missing_members]
+                 if missing_members is not None else missing_portrait_names(
+                     [member.name for member in self.character_members], self.project_path,
+                     {member.name.casefold(): member.id for member in self.character_members},
+                 ))
         if not names:
             message = tr("grabber.nothing_missing")
             self.worker_status_label.setText(message)
@@ -3205,6 +3299,7 @@ class GuildPortraitGrabberQt(QMainWindow):
             return False
         return self._start_portrait_batch(
             names, tr("grabber.create_missing"), overwrite_existing=False,
+            members=missing_members,
         )
 
     def _request_worker_cancel_once(self) -> bool:
@@ -3330,6 +3425,16 @@ class GuildPortraitGrabberQt(QMainWindow):
         event_name = str(event.get("name") or "")
         if self._active_worker_action == "capture":
             member = self._member_by_id.get(str(self._active_worker_member_id or ""))
+        elif self.v2_mode:
+            try:
+                received_path = Path(str(event.get("path") or "")).resolve()
+                candidate = self._member_by_id.get(received_path.stem)
+                member = (candidate if candidate is not None
+                          and candidate.id in self._batch_member_ids
+                          and normal_portrait_path(candidate.id, self.project_path).resolve()
+                          == received_path else None)
+            except (OSError, TypeError, ValueError):
+                member = None
         else:
             batch_names = {name.casefold() for name in self._batch_names}
             member = next((
@@ -3384,6 +3489,11 @@ class GuildPortraitGrabberQt(QMainWindow):
             return
         incoming_id = str(result.get("memberId") or "").strip()
         member = self._member_by_id.get(incoming_id) if incoming_id else None
+        if member is None and self._active_worker_member_id:
+            selected = self._member_by_id.get(self._active_worker_member_id)
+            if (selected is not None and selected.name.casefold()
+                    == str(result.get("characterName") or "").strip().casefold()):
+                member = selected
         if member is None:
             name = str(result.get("characterName") or "").strip().casefold()
             matches = [
@@ -3396,7 +3506,8 @@ class GuildPortraitGrabberQt(QMainWindow):
         if self._active_worker_member_id and member.id != self._active_worker_member_id:
             return
         self.armory_results[member.id] = dict(result)
-        if self.project_path is not None and not member.id.startswith("working:"):
+        if (not self.v2_mode and self.project_path is not None
+                and not member.id.startswith("working:")):
             try:
                 self._dispatch_project_action(
                     "update_member_metadata",
@@ -3557,7 +3668,7 @@ class GuildPortraitGrabberQt(QMainWindow):
         if not source:
             return False
         try:
-            import_active_portrait_image(Path(source), member.id, project_path)
+            import_active_portrait_image(Path(source), member.id, self.project_path)
         except (OSError, TypeError, ValueError, RuntimeError) as exc:
             message = tr("grabber.manual_portrait_error", error=exc)
             self._show_portrait_management_error(tr("grabber.manual_portrait"), message)
@@ -3624,7 +3735,7 @@ class GuildPortraitGrabberQt(QMainWindow):
             return True
         try:
             state = load_portrait_editor_state(portrait)
-            destination = normal_portrait_path(member.id, project_path)
+            destination = normal_portrait_path(member.id, self.project_path)
             dialog = PortraitEditorDialogQt(
                 member.name,
                 state,
@@ -3649,9 +3760,15 @@ class GuildPortraitGrabberQt(QMainWindow):
         sorting = self.character_table.isSortingEnabled()
         self.character_table.setSortingEnabled(False)
         self.character_model.setRowCount(0)
+        name_counts: dict[str, int] = {}
+        for member in self.character_members:
+            key = member.name.casefold()
+            name_counts[key] = name_counts.get(key, 0) + 1
         for member in self.character_members:
             name_item = QStandardItem(member.name)
             name_item.setData(member.id, Qt.ItemDataRole.UserRole)
+            name_item.setToolTip(
+                member.id if name_counts[member.name.casefold()] > 1 else "")
             items = [
                 name_item,
                 QStandardItem(),
@@ -3896,6 +4013,8 @@ class GuildPortraitGrabberQt(QMainWindow):
         if (dialog is None or project_path is None
                 or self._pending_gravestone_save_token is not None):
             return False
+        if self.v2_mode:
+            return self._save_v2_gravestone_editor_draft(dialog, project_path)
         draft = dialog.state.draft
         try:
             # A broken template or renderer must never become the persisted state.
@@ -3972,6 +4091,41 @@ class GuildPortraitGrabberQt(QMainWindow):
             name=reloaded.name,
             stone=reloaded.gravestoneTemplate,
         ))
+        return True
+
+    def _save_v2_gravestone_editor_draft(self, dialog, project_path: Path) -> bool:
+        """Apply one V2 memberId edit to a freshly loaded project, atomically."""
+        root = str(Path(__file__).resolve().parents[1])
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        from app.identity_v2_graveyard import set_member_gravestone_adjustment
+        from app.identity_v2_storage import load_identity_v2, save_identity_v2
+
+        draft = dialog.state.draft
+        try:
+            dialog.render_draft()
+            fresh = load_identity_v2(project_path)
+            inventory = self.project_model.gravestone_inventory()
+            changed = set_member_gravestone_adjustment(
+                fresh, dialog.state.member_id, draft.template_id,
+                draft.portrait_offset_x, draft.portrait_offset_y,
+                draft.portrait_zoom, draft.text_offset_x,
+                draft.text_offset_y, draft.text_scale, inventory.by_id(),
+            )
+            save_identity_v2(changed, project_path)
+            if not self.load_project(project_path):
+                raise ValueError(self.project_error or "V2 reload failed")
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            message = tr("grabber.graveyard_save_failed", error=exc)
+            dialog.show_save_error(message)
+            self.statusBar().showMessage(message)
+            return False
+        member = self._graveyard_member_by_id.get(dialog.state.member_id)
+        dialog.accept()
+        if member is not None:
+            self.graveyard_assignment_status_label.setText(tr(
+                "grabber.graveyard_stone_saved",
+                name=member.name, stone=member.gravestoneTemplate or member.graveTemplateId))
         return True
 
     def _poll_gravestone_save_receipt(self) -> None:
@@ -4088,6 +4242,8 @@ class GuildPortraitGrabberQt(QMainWindow):
                 candidate_ids,
                 parent=self,
             )
+            if self.v2_mode:
+                dialog.death_date_edit.setEnabled(False)
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             message = tr("grabber.gravestone_editor_open_failed", error=exc)
             self.graveyard_assignment_status_label.setText(message)

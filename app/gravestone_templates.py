@@ -12,6 +12,7 @@ import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Iterable
 
 from PIL import Image
 
@@ -93,6 +94,21 @@ class GravestoneInventory:
             if item.filename.casefold() == name or item.path.name.casefold() == name
         ]
         return matches[0] if len(matches) == 1 else None
+
+
+def choose_gravestone_template(template_ids: Iterable[str], member_id: str,
+                               previous_template: str | None = None) -> str:
+    """Use the established stable member-ID selection for an ordered inventory."""
+    available = tuple(template_ids)
+    if not available:
+        return ""
+    seed = sum((index + 1) * byte for index, byte in enumerate(
+        str(member_id).encode("utf-8", errors="replace")
+    ))
+    choice_index = seed % len(available)
+    if len(available) > 1 and available[choice_index] == previous_template:
+        choice_index = (choice_index + 1) % len(available)
+    return available[choice_index]
 
 
 @dataclass(frozen=True)
