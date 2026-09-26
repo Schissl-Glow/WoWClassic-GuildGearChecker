@@ -76,7 +76,7 @@ class BannerHeader(QFrame):
         family = decorative_font_family()
         self.title_label.setFont(QFont(family, 25))
         self.title_label.setStyleSheet(
-            f'font-family: "{family}"; font-size: 25pt; color: #f3ead7; background: transparent;')
+            f'font-family: "{family}";')
         self.version_label = QLabel(f"Version {APP_VERSION}")
         self.version_label.setObjectName("launcherVersion")
         title_column.addWidget(self.title_label)
@@ -95,7 +95,7 @@ class BannerHeader(QFrame):
             button.setFixedWidth(44)
             button.setFixedHeight(29)
         separator = QLabel("|")
-        separator.setStyleSheet("background:transparent;color:#d0d5da;")
+        separator.setObjectName("launcherSeparator")
         language_row.addWidget(self.de_button)
         language_row.addWidget(separator)
         language_row.addWidget(self.en_button)
@@ -160,7 +160,7 @@ class GuildCard(QFrame):
         self.mode_label = QLabel(tr(
             "launcher.eternal_dkp" if entry.point_mode == POINT_MODE_ETERNAL
             else "launcher.raid_points"))
-        self.mode_label.setStyleSheet("color:#e1c183;background:transparent;")
+        self.mode_label.setObjectName("launcherMode")
         first.addWidget(self.mode_label)
         if not entry.missing:
             self.menu_button = QPushButton("⋯")

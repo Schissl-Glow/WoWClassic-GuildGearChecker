@@ -169,6 +169,14 @@ set "TEST_ENTRY=tests/startmenu_phase1_tests.py"
 set "TEST_COMMAND="%GGC_PYTHON%" -B -X utf8 -m unittest tests.startmenu_phase1_tests"
 call :RUN_TEST "Startmenue Phase 1 und Identity V2"
 
+set "TEST_ENTRY=Identity-V2-Charaktere, CSV/CLM-Raids, Attendance und Portraits"
+set "TEST_COMMAND="%GGC_PYTHON%" -B -X utf8 -m unittest tests.identity_v2_character_service_tests tests.csv_v2_materialization_tests tests.clm_raid_v2_materialization_tests tests.identity_v2_attendance_adapter_tests tests.identity_v2_views_tests tests.identity_v2_players_qt_tests tests.identity_v2_character_portrait_qt_tests"
+call :RUN_TEST "Identity V2 Irrelevant"
+
+set "TEST_ENTRY=Identity-V2-Projektspeicherung und aktuelle DKP"
+set "TEST_COMMAND="%GGC_PYTHON%" -B -X utf8 -m unittest tests.identity_v2_project_tests tests.identity_v2_project_qt_tests"
+call :RUN_TEST "Aktuelle DKP nach Speichern und Neustart"
+
 set "TEST_ENTRY=tests/launcher_ui_tests.py"
 set "TEST_COMMAND="%GGC_PYTHON%" -B -X utf8 -m unittest tests.launcher_ui_tests"
 call :RUN_TEST "Startmenue Launcher-UI"

@@ -7311,7 +7311,7 @@ class GuildGearCheckerApp(tk.Tk):
 
 
 def run_self_tests() -> None:
-    assert APP_VERSION == "0.12.1"
+    assert APP_VERSION == "0.12.2"
     assert build_armory_url("Ánníe").endswith("/%C3%81nn%C3%ADe?game_version=classic1x")
     assert build_armory_url("Schlübbeer").endswith("/Schl%C3%BCbbeer?game_version=classic1x")
     assert norm_name(" Bífi ") == norm_name("bífi")

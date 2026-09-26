@@ -6,8 +6,10 @@ from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import QAbstractItemView, QStyle, QStyledItemDelegate, QStyleOptionViewItem
 
+from .qt_theme import TABLE_ROW_HOVER
 
-_HOVER_BRUSH = QBrush(QColor("#332b20"))
+
+_HOVER_BRUSH = QBrush(QColor(TABLE_ROW_HOVER))
 
 
 class RowHoverTracker(QObject):

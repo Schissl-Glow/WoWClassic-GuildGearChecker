@@ -3,6 +3,7 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 from pathlib import Path
 
@@ -11,7 +12,9 @@ from app.clm_v2_initialization import (
     analyze_clm_v2_selection, build_new_clm_v2_guild, inspect_clm_v2_source,
 )
 from app.identity_v2 import IdentityV2Store, IdentityV2ValidationError
+from app.identity_v2_dkp import IdentityV2DkpProjection, with_current_dkp_snapshot
 from app.identity_v2_storage import load_identity_v2, save_identity_v2, save_new_identity_v2
+from app.clm_models import ClmCharacterBalance
 from tests.clm_v2_initialization_tests import synthetic_lua
 
 
@@ -83,6 +86,38 @@ class IdentityV2ProjectTests(unittest.TestCase):
         self.assertIsNone(older.clmLuaPath)
         self.assertIsNone(older.clmDatabaseId)
         self.assertIsNone(older.clmRosterId)
+
+    def test_last_manual_current_dkp_survives_save_and_load_without_lua_replay(self):
+        member = next(item for item in self.store.members if item.clmGuid)
+        refreshed_at = datetime(2026, 9, 27, 10, 30, tzinfo=timezone.utc)
+        changed = with_current_dkp_snapshot(
+            self.store,
+            (ClmCharacterBalance(member.name, 42.5, member.clmGuid),),
+            refreshed_at,
+        )
+        self.assertEqual(self.store.currentDkpByMemberId, {})
+        self.assertEqual(changed.currentDkpByMemberId, {member.memberId: 42.5})
+        target = self.root / "Mit_DKP.ggc"
+        save_new_identity_v2(changed, target)
+        with patch("app.clm_savedvariables.load_saved_variables",
+                   side_effect=AssertionError("Lua beim Projektöffnen gelesen")):
+            restored = load_identity_v2(target)
+        self.assertEqual(restored.currentDkpByMemberId, {member.memberId: 42.5})
+        self.assertEqual(restored.currentDkpRefreshedAt, refreshed_at.isoformat())
+        projection = IdentityV2DkpProjection(restored)
+        self.assertEqual(projection.available_for_member(member.memberId), 42.5)
+        self.assertEqual(projection.refreshed_at, refreshed_at)
+        old_payload = self.store.to_payload()
+        old_payload.pop("currentDkpByMemberId", None)
+        old_payload.pop("currentDkpRefreshedAt", None)
+        self.assertEqual(IdentityV2Store.from_payload(old_payload).currentDkpByMemberId, {})
+        restored.currentDkpByMemberId[member.memberId] = float("nan")
+        with self.assertRaises(IdentityV2ValidationError):
+            restored.validate()
+        restored.currentDkpByMemberId[member.memberId] = 42.5
+        restored.currentDkpRefreshedAt = "2026-09-27T10:30:00"
+        with self.assertRaises(IdentityV2ValidationError):
+            restored.validate()
 
     def test_legacy_file_is_never_replaced_by_v2_save(self):
         legacy = self.root / "Legacy.ggc"

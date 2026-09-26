@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from collections import defaultdict
 from datetime import datetime
 from typing import Iterable
@@ -31,6 +32,17 @@ def available_dkp_by_member(
     return dict(result)
 
 
+def with_current_dkp_snapshot(
+    store: IdentityV2Store, balances: Iterable[object], refreshed_at: datetime,
+) -> IdentityV2Store:
+    """Keep the last explicitly refreshed CLM balance in the project store."""
+    result = copy.deepcopy(store)
+    result.currentDkpByMemberId = available_dkp_by_member(store, balances)
+    result.currentDkpRefreshedAt = refreshed_at.isoformat()
+    result.validate()
+    return result
+
+
 class IdentityV2DkpProjection:
     """Cached display values derived from existing CLM, V2, and raid projections."""
 
@@ -45,8 +57,12 @@ class IdentityV2DkpProjection:
     ) -> None:
         store.validate()
         self.store = store
-        self.available_by_member = dict(available_by_member or {})
-        self.refreshed_at = refreshed_at
+        self.available_by_member = dict(
+            store.currentDkpByMemberId if available_by_member is None
+            else available_by_member)
+        self.refreshed_at = (
+            datetime.fromisoformat(store.currentDkpRefreshedAt)
+            if refreshed_at is None and store.currentDkpRefreshedAt else refreshed_at)
         self.raid_points_projection = raid_points_projection
         self.registry = registry or RewardRegistry()
         self.eternal_by_member = store.eternal_dkp_by_member()

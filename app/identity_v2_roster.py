@@ -120,7 +120,7 @@ def build_v2_roster_items(
         }
     result: list[V2RosterItem] = []
     for row in character_table_rows(store):
-        if row.lifeStatus != "active":
+        if row.lifeStatus != "active" or members[row.memberId].irrelevant:
             continue
         member = members[row.memberId]
         player_points = (

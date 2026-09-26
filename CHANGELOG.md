@@ -2,6 +2,13 @@
 
 Dieses Changelog hält den aktuellen Entwicklungsstand kompakt. Ältere Einzel-Release-Notes wurden aus dem Repository-Root entfernt; ihre Inhalte bleiben weiterhin vollständig über die Git-Historie nachvollziehbar.
 
+## 0.12.2 – Release
+
+- Checker, Startmenü und Portrait Grabber nutzen eine gemeinsame Qt-Stylesheet-Basis. Der Kopfbereich verbindet Gildenbanner, Navigation und Roster-Werkzeuge klarer.
+- Roster-Karten behalten ihre gefasste Darstellung; Portraits werden vollständig proportional eingepasst und die Klasse im Detail ohne zusätzliches Icon farbig angezeigt.
+- Aktuelle CLM-DKP-Stände bleiben nach Speichern und erneutem Öffnen erhalten.
+- Als irrelevant markierte Charaktere sind in der Verwaltung getrennt erkennbar und werden bei Roster- und Raidansichten entsprechend berücksichtigt.
+
 ## 0.12.1 – Release
 
 - Neues Startmenü mit Projektverwaltung; Identity V2 ist der produktive Standard. Der Checker verwendet das neue V2-Roster und Spielerprofil ohne Legacy-, Neu- oder Qt/Tkinter-Umschalter.

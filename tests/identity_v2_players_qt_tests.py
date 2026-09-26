@@ -252,6 +252,40 @@ class IdentityV2PlayersQtTests(unittest.TestCase):
         self.select_player("p0002")
         self.assertEqual(self.page.group_rows["active"], ("m1004",))
 
+    def test_irrelevant_bulk_filter_and_restore_without_attendance(self):
+        self.assertEqual(self.page.status_filter.currentData(), "open")
+        self.select_unknown("m1005", "m1008")
+        with patch.object(QMessageBox, "question",
+                          return_value=QMessageBox.StandardButton.Yes):
+            self.page.mark_irrelevant_button.click()
+        self.assertEqual(len(self.changed), 1)
+        self.assertIn("(2)", self.page.player_table.item(0, 0).text())
+        self.assertFalse(any(item.memberId in {"m1005", "m1008"}
+                             for item in self.page.store.attendance))
+        self.page.status_filter.setCurrentIndex(
+            self.page.status_filter.findData("irrelevant"))
+        self.assertEqual(self.page.unassigned_table.rowCount(), 2)
+        self.assertTrue(all(self.page.unassigned_table.item(row, 3).text()
+                            == tr("identity_v2_players.irrelevant")
+                            for row in range(2)))
+        self.page.status_filter.setCurrentIndex(
+            self.page.status_filter.findData("all"))
+        self.assertEqual(self.page.unassigned_table.rowCount(), 4)
+        self.page.status_filter.setCurrentIndex(
+            self.page.status_filter.findData("irrelevant"))
+        self.select_unknown("m1005", "m1008")
+        self.assertFalse(self.page.assign_button.isEnabled())
+        self.page.unmark_irrelevant_button.click()
+        self.assertEqual(len(self.changed), 2)
+        self.assertEqual(self.page.unassigned_table.rowCount(), 0)
+        self.page.status_filter.setCurrentIndex(
+            self.page.status_filter.findData("open"))
+        self.assertIn("(4)", self.page.player_table.item(0, 0).text())
+        self.assertFalse(any(item.memberId in {"m1005", "m1008"}
+                             for item in self.page.store.attendance))
+        self.assertTrue(all(item.playerId is None for item in self.page.store.members
+                            if item.memberId in {"m1005", "m1008"}))
+
     def test_create_and_assign_unknown_character_use_services(self):
         before = self.store.to_payload()
         self.select_unknown_row("m1005")

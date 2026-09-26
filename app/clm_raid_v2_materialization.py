@@ -37,6 +37,7 @@ def suggest_clm_raid_type(title: str) -> str:
 
 def review_clm_raids(store: IdentityV2Store, analysis: ClmRaidV2Analysis) -> tuple[ClmRaidReviewRow, ...]:
     existing = {raid.clmRaidId: raid for raid in store.raids if raid.clmRaidId}
+    irrelevant = _irrelevant_clm_guids(store)
     rows = []
     for source in analysis.raids:
         current = existing.get(source.raid_id)
@@ -47,7 +48,8 @@ def review_clm_raids(store: IdentityV2Store, analysis: ClmRaidV2Analysis) -> tup
         conflict = current is not None and _clm_attendance_conflict(store, current, source)
         rows.append(ClmRaidReviewRow(
             source.raid_id, local_raid_date(source.start_timestamp) or "",
-            source.name, len(source.participants), raid_type,
+            source.name, sum(item.guid.casefold() not in irrelevant
+                             for item in source.participants), raid_type,
             "Teilnehmer abweichend" if conflict else
             "Typ fehlt" if current and detect_raid_type(current.raidType) is None else
             "bereits importiert" if current else "neu" if raid_type else "Typ fehlt",
@@ -55,9 +57,21 @@ def review_clm_raids(store: IdentityV2Store, analysis: ClmRaidV2Analysis) -> tup
     return tuple(rows)
 
 
+def _irrelevant_clm_guids(store: IdentityV2Store) -> set[str]:
+    irrelevant_ids = {member.memberId for member in store.members
+                      if member.irrelevant}
+    return {guid for guid, member_id in _guid_owners(store).items()
+            if member_id in irrelevant_ids}
+
+
+def _ignored_clm_guids(store: IdentityV2Store) -> set[str]:
+    return ({guid.casefold() for group in store.ignoredClmCharacterGroups
+             for guid in group.clmGuids}
+            | _irrelevant_clm_guids(store))
+
+
 def _clm_attendance_conflict(store, raid, source) -> bool:
-    ignored = {guid.casefold() for group in store.ignoredClmCharacterGroups
-               for guid in group.clmGuids}
+    ignored = _ignored_clm_guids(store)
     source_guids = {item.guid.casefold() for item in source.participants
                     if item.guid.casefold() not in ignored}
     stored_guids = {item.clmGuid.casefold() for item in store.attendance
@@ -74,8 +88,7 @@ def clm_raid_attendance_difference(
                    if item.raid_id == clm_raid_id), None)
     if raid is None or source is None:
         raise ClmRaidMaterializationError("CLM-Raid für Korrektur nicht gefunden.")
-    ignored = {guid.casefold() for group in store.ignoredClmCharacterGroups
-               for guid in group.clmGuids}
+    ignored = _ignored_clm_guids(store)
     source_guids = {item.guid.casefold(): item.guid for item in source.participants
                     if item.guid.casefold() not in ignored}
     stored_guids = {item.clmGuid.casefold(): item.clmGuid
@@ -98,8 +111,7 @@ def correct_clm_raid_attendance(
     if raid is None or source is None:
         raise ClmRaidMaterializationError("CLM-Raid für Korrektur nicht gefunden.")
     owners = _guid_owners(result)
-    ignored = {guid.casefold() for group in result.ignoredClmCharacterGroups
-               for guid in group.clmGuids}
+    ignored = _ignored_clm_guids(result)
     participants: dict[str, tuple[str, str]] = {}
     for participant in source.participants:
         key = participant.guid.casefold()
@@ -205,11 +217,7 @@ def materialize_clm_raids_into_identity_v2(
         raise ClmRaidMaterializationError("Jeder neue CLM-Raid benötigt einen gültigen Raid-Typ.")
 
     owners = _guid_owners(store)
-    ignored_guids = {
-        guid.casefold()
-        for group in store.ignoredClmCharacterGroups
-        for guid in group.clmGuids
-    }
+    ignored_guids = _ignored_clm_guids(store)
     for evidence in raid_analysis.identity_analysis.raid_coexistence:
         if evidence.raid_id not in selected:
             continue

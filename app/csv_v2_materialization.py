@@ -407,6 +407,8 @@ def materialize_csv_raid_import(
                 )
             if member_id not in members:
                 raise CsvV2MaterializationError(f"Unbekannte memberId {member_id!r}.")
+            if members[member_id].irrelevant:
+                continue
             require_member_attendance_date(members[member_id], candidate.raid_date)
             if member_id in seen_members_in_file:
                 raise CsvV2MaterializationError(

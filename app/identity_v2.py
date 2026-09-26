@@ -7,7 +7,7 @@ not read, migrate, or rewrite legacy project files.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import date
+from datetime import date, datetime
 from math import isfinite
 from typing import Any, Iterable
 import re
@@ -183,6 +183,7 @@ class Member:
     textOffsetX: float = 0.0
     textOffsetY: float = 0.0
     textScale: float = 1.0
+    irrelevant: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Member":
@@ -192,6 +193,7 @@ class Member:
             className=_optional_class_text(data.get("className")),
             lifeStatus=_text(data.get("lifeStatus")) or "active",
             playerId=_optional_text(data.get("playerId")),
+            irrelevant=data.get("irrelevant", False),
             currentRole=_optional_text(data.get("currentRole")),
             clmGuid=_optional_text(data.get("clmGuid")),
             continuationOfMemberId=_optional_text(data.get("continuationOfMemberId")),
@@ -221,7 +223,13 @@ class Member:
 
     def to_dict(self) -> dict[str, Any]:
         return {key: value for key, value in asdict(self).items()
-                if value is not None or key in {"className", "burialType"}}
+                if (value is not None and (key != "irrelevant" or value))
+                or key in {"className", "burialType"}}
+
+
+def portrait_eligible_members(members: Iterable[Member]) -> tuple[Member, ...]:
+    """Only relevant identities may enter any portrait list or batch queue."""
+    return tuple(member for member in members if not member.irrelevant)
 
 
 def member_attendance_after_death(member: Member, raid_date: str) -> bool:
@@ -413,6 +421,8 @@ class IdentityV2Store:
     clmLuaPath: str | None = None
     clmDatabaseId: str | None = None
     clmRosterId: str | None = None
+    currentDkpByMemberId: dict[str, int | float] = field(default_factory=dict)
+    currentDkpRefreshedAt: str | None = None
 
     def validate(self) -> None:
         if self.pointMode not in POINT_MODES:
@@ -486,6 +496,22 @@ class IdentityV2Store:
         _unique((r.recordId for r in self.eternalDkpRecords), "EternalDkpRecord.recordId")
         attendance_ids = {entry.attendanceId for entry in self.attendance}
         member_ids = {member.memberId for member in self.members}
+        if not isinstance(self.currentDkpByMemberId, dict):
+            raise IdentityV2ValidationError("Aktuelle DKP müssen eine Member-ID-Zuordnung sein.")
+        for member_id, value in self.currentDkpByMemberId.items():
+            if (member_id not in member_ids or isinstance(value, bool)
+                    or not isinstance(value, (int, float)) or not isfinite(value)):
+                raise IdentityV2ValidationError(
+                    f"Ungültige aktuelle DKP bei Member {member_id!r}.")
+        if self.currentDkpRefreshedAt is not None:
+            try:
+                refreshed = datetime.fromisoformat(self.currentDkpRefreshedAt)
+            except (TypeError, ValueError) as exc:
+                raise IdentityV2ValidationError(
+                    "Ungültiger DKP-Aktualisierungszeitpunkt.") from exc
+            if refreshed.tzinfo is None or refreshed.utcoffset() is None:
+                raise IdentityV2ValidationError(
+                    "DKP-Aktualisierungszeitpunkt benötigt eine Zeitzone.")
         for attendance_id, adjustment in points.adjustments.items():
             if (not isinstance(adjustment, ManualRaidPointAdjustment)
                     or attendance_id != adjustment.attendance_id
@@ -536,6 +562,12 @@ class IdentityV2Store:
         guid_owner: dict[str, str] = {}
         grave_owner: dict[str, str] = {}
         for member in self.members:
+            if not isinstance(member.irrelevant, bool):
+                raise IdentityV2ValidationError(
+                    f"Ungültige Irrelevant-Klassifikation bei {member.memberId}.")
+            if member.irrelevant and member.playerId is not None:
+                raise IdentityV2ValidationError(
+                    f"Irrelevanter Member {member.memberId} darf keine playerId besitzen.")
             if member.className is not None and (
                     not isinstance(member.className, str)
                     or member.className not in CLASS_SPECS):
@@ -726,6 +758,9 @@ class IdentityV2Store:
 
         attendance_by_raid_member: dict[tuple[str, str], Attendance] = {}
         for entry in self.attendance:
+            if entry.memberId in members and members[entry.memberId].irrelevant:
+                raise IdentityV2ValidationError(
+                    f"Irrelevanter Member {entry.memberId} darf keine Attendance besitzen.")
             if entry.attendanceType not in ATTENDANCE_TYPES:
                 raise IdentityV2ValidationError(
                     f"Ungültiger attendanceType bei {entry.attendanceId}: "
@@ -794,6 +829,9 @@ class IdentityV2Store:
             value = getattr(self, field_name)
             if value is not None:
                 payload[field_name] = value
+        if self.currentDkpByMemberId or self.currentDkpRefreshedAt is not None:
+            payload["currentDkpByMemberId"] = dict(self.currentDkpByMemberId)
+            payload["currentDkpRefreshedAt"] = self.currentDkpRefreshedAt
         if self.ignoredCsvCharacterNames:
             payload["ignoredCsvCharacterNames"] = list(self.ignoredCsvCharacterNames)
         if self.ignoredClmCharacterGroups:
@@ -853,6 +891,8 @@ class IdentityV2Store:
             clmLuaPath=payload.get("clmLuaPath"),
             clmDatabaseId=payload.get("clmDatabaseId"),
             clmRosterId=payload.get("clmRosterId"),
+            currentDkpByMemberId=payload.get("currentDkpByMemberId", {}),
+            currentDkpRefreshedAt=payload.get("currentDkpRefreshedAt"),
             guildName=payload.get("guildName", ""),
             realm=payload.get("realm", ""),
         )

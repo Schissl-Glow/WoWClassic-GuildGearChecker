@@ -170,6 +170,24 @@ class ClmRaidV2MaterializationTests(unittest.TestCase):
         self.assertEqual(raid_category(raid.raidType), "40er")
         self.assertEqual(len(store.attendance), 1)
 
+    def test_irrelevant_guid_stays_known_without_clm_attendance(self):
+        port = ((1, 102), "Portchar", 5, 1, None)
+        analysis = analysis_for((self.MAIN, port), (
+            (3, "MC", ((1, 101), (1, 102)), (), ()),
+        ))
+        base = first_import_store(analysis)
+        irrelevant = next(item for item in base.members if item.name == "Portchar")
+        irrelevant.irrelevant = True
+        self.assertEqual(review_clm_raids(base, analysis)[0].participants, 1)
+        imported = materialize_clm_raids_into_identity_v2(base, analysis)
+        self.assertEqual([item.memberId for item in imported.attendance],
+                         [next(item.memberId for item in imported.members
+                               if item.name == "Main")])
+        self.assertEqual(clm_raid_attendance_difference(
+            imported, analysis, analysis.raids[0].raid_id), ((), ()))
+        self.assertEqual(materialize_clm_raids_into_identity_v2(
+            imported, analysis).attendance, imported.attendance)
+
     def test_multiple_raids_have_distinct_stable_ids(self):
         analysis = analysis_for((self.MAIN,), (
             (3, "MC", ((1, 101),), (), ()),

@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app.identity_v2 import (  # noqa: E402
-    Attendance, IdentityV2Store, IdentityV2ValidationError, Member, Player, Raid,
+    Attendance, CsvRaidSource, IdentityV2Store, IdentityV2ValidationError,
+    Member, Player, Raid, RaidCreditResolution, portrait_eligible_members,
 )
 from app.identity_v2_character_rows import character_table_rows  # noqa: E402
 from app.identity_v2_character_service import (  # noqa: E402
@@ -18,10 +19,11 @@ from app.identity_v2_character_service import (  # noqa: E402
     clear_member_death_marking, confirm_member_check, correct_member_death_date,
     mark_member_dead, set_member_class, set_member_gear_status, set_member_note,
     set_member_race, set_member_raid_role, set_member_raid_status, set_member_spec,
-    set_member_burial_type,
+    set_member_burial_type, set_members_irrelevant,
 )
 from app.identity_v2_storage import load_identity_v2, save_new_identity_v2  # noqa: E402
 from app.gravestone_templates import GravestoneTemplate  # noqa: E402
+from app.raid_points import ManualRaidPointAdjustment  # noqa: E402
 
 
 def sample_store() -> IdentityV2Store:
@@ -76,6 +78,75 @@ class IdentityV2CharacterServiceTests(unittest.TestCase):
         self.assertEqual(restored.to_payload(), loaded.to_payload())
         for key in ("players", "raids", "attendance", "legacyClmGuidMemberMap"):
             self.assertEqual(restored.to_payload()[key], old[key])
+
+    def test_irrelevant_member_roundtrip_and_attendance_invariant(self):
+        unknown = next(item for item in self.store.members if item.memberId == "m3")
+        self.assertFalse(unknown.irrelevant)
+        unknown.irrelevant = True
+        payload = self.store.to_payload()
+        self.assertTrue(next(item for item in payload["members"]
+                             if item["memberId"] == "m3")["irrelevant"])
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "irrelevant-v2.ggc"
+            save_new_identity_v2(self.store, target)
+            restored = load_identity_v2(target)
+        self.assertTrue(next(item for item in restored.members
+                             if item.memberId == "m3").irrelevant)
+        self.assertIsNone(next(item for item in restored.members
+                               if item.memberId == "m3").playerId)
+        restored.attendance.append(Attendance("a4", "r1", "m3", "unknown"))
+        with self.assertRaisesRegex(IdentityV2ValidationError, "keine Attendance"):
+            restored.validate()
+
+    def test_irrelevant_never_enters_portrait_candidates_even_with_full_metadata(self):
+        self.store.members[2].irrelevant = True
+        self.store.members[2].className = "Mage"
+        self.store.members[2].race = "Human"
+        self.assertEqual({item.memberId for item in portrait_eligible_members(
+            self.store.members)}, {"m1", "m2"})
+
+    def test_mark_many_irrelevant_cleans_attendance_and_restore_does_not_recreate_it(self):
+        self.store.members.append(Member("m4", "Portchar", "Mage"))
+        self.store.raids[0].csvSources = (CsvRaidSource("raid-source.csv"),)
+        self.store.raids.append(Raid("r3", "2026-03-17", name="Onyxia"))
+        self.store.attendance.extend((
+            Attendance("a4", "r1", "m3", "unknown", playerId="p1"),
+            Attendance("a5", "r2", "m3", "unknown", status="bench"),
+            Attendance("a6", "r1", "m4", "unknown"),
+            Attendance("a7", "r3", "m3", "unknown"),
+        ))
+        self.store.raidCreditResolutions.append(
+            RaidCreditResolution("r1", "p1", "m3"))
+        self.store.raidPoints.adjustments["a4"] = ManualRaidPointAdjustment(
+            "a4", 5, "Historische Korrektur")
+        self.store.validate()
+        before = self.store.to_payload()
+        changed = set_members_irrelevant(self.store, ("m3", "m4"), True)
+        self.assertEqual(self.store.to_payload(), before)
+        self.assertEqual({item.memberId for item in changed.members if item.irrelevant},
+                         {"m3", "m4"})
+        self.assertEqual(len(changed.players), len(self.store.players))
+        self.assertEqual({item.memberId: item.lifeStatus for item in changed.members
+                          if item.irrelevant}, {"m3": "active", "m4": "active"})
+        self.assertEqual({item.attendanceId for item in changed.attendance},
+                         {"a1", "a2", "a3"})
+        self.assertEqual(changed.raidPoints.adjustments, {})
+        self.assertEqual(changed.raidCreditResolutions, [])
+        self.assertEqual(changed.raids[0].csvSources,
+                         (CsvRaidSource("raid-source.csv"),))
+        self.assertEqual({item.memberId: item.playerId for item in changed.members
+                          if item.irrelevant}, {"m3": None, "m4": None})
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "irrelevant-batch.ggc"
+            save_new_identity_v2(changed, target)
+            restored = load_identity_v2(target)
+        reopened = set_members_irrelevant(restored, ("m3", "m4"), False)
+        self.assertFalse(any(item.irrelevant for item in reopened.members))
+        self.assertEqual({item.attendanceId for item in reopened.attendance},
+                         {"a1", "a2", "a3"})
+        with self.assertRaises(CharacterDataError):
+            set_members_irrelevant(self.store, ("m3", "missing"), True)
+        self.assertEqual(self.store.to_payload(), before)
 
     def test_character_fields_and_class_spec_rules_are_atomic(self):
         before = self.store.to_payload()

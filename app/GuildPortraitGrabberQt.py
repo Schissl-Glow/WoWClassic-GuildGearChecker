@@ -64,6 +64,11 @@ except ImportError:
     from qt_row_hover import install_row_hover  # type: ignore
 
 try:
+    from app.qt_theme import GLOBAL_STYLE_SHEET
+except ImportError:
+    from qt_theme import GLOBAL_STYLE_SHEET  # type: ignore
+
+try:
     from app.GuildGearChecker import (
         GRAVESTONE_CARD_SIZE,
         GRAVESTONE_PORTRAIT_ZOOM_RANGE,
@@ -230,42 +235,10 @@ except ImportError:  # Direkter Start über app\GuildPortraitGrabberQt.py
 
 
 APP_NAME = "Guild Portrait Grabber"
-APP_VERSION = "0.12.1"
-GRABBER_INTERACTION_STYLE = """
-QPushButton, QToolButton {
-    background:#202a33; color:#f0dfbf; border:1px solid #4c5b68;
-    border-radius:4px; padding:4px 8px;
-}
-QPushButton:hover, QToolButton:hover {background:#263746; border-color:#8193a2;}
-QPushButton:pressed, QToolButton:pressed {background:#151f29; border-color:#8193a2;}
-QPushButton:disabled, QToolButton:disabled {
-    background:#171d24; color:#747e87; border-color:#2b333b;
-}
-QPushButton:focus, QToolButton:focus {border-color:#c7a265;}
-QTabBar::tab {
-    background:#171f28; color:#aeb8c2; border:1px solid #303b47;
-    border-top:2px solid transparent; padding:6px 10px;
-}
-QTabBar::tab:hover {background:#202d3b; color:#e0e9ef;}
-QTabBar::tab:selected {background:#202932; color:#f3e6cd; border-top-color:#c7a265;}
-QTabBar::tab:selected:hover {background:#202932; color:#f3e6cd;}
-QTabBar::tab:disabled {background:#151b22; color:#68727c;}
-QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
-    background:#10161d; color:#e8edf1; border:1px solid #35414d;
-    border-radius:4px; padding:4px;
-}
-QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {
-    border-color:#6b7885;
-}
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
-    border-color:#c7a265;
-}
-QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {
-    background:#171d24; color:#747e87; border-color:#2b333b;
-}
-QTableView {selection-background-color:#302b22; selection-color:#f5dfb1; outline:0;}
-QHeaderView::section:hover {background:#293542; color:#f1d79f;}
-"""
+APP_VERSION = "0.12.2"
+# Compatibility name; the grabber uses the same global component sheet.
+GRABBER_INTERACTION_STYLE = GLOBAL_STYLE_SHEET
+
 GRAVESTONE_CATEGORY_FILTER_ALL = "__all__"
 GRABBER_MINIMUM_SIZE = QSize(1050, 760)
 GRABBER_INITIAL_RATIO = 0.75
@@ -1522,7 +1495,7 @@ class GuildPortraitGrabberQt(QMainWindow):
                  worker_factory: Callable[[queue.Queue], object] | None = None,
                  config_data: dict | None = None) -> None:
         super().__init__()
-        self.setStyleSheet(GRABBER_INTERACTION_STYLE)
+        self.setStyleSheet(GLOBAL_STYLE_SHEET)
         self.project_path: Path | None = None
         self.project_payload: dict | None = None
         self.project_error: str | None = None
@@ -2388,7 +2361,7 @@ class GuildPortraitGrabberQt(QMainWindow):
                 root = str(Path(__file__).resolve().parents[1])
                 if root not in sys.path:
                     sys.path.insert(0, root)
-                from app.identity_v2 import IdentityV2Store
+                from app.identity_v2 import IdentityV2Store, portrait_eligible_members
 
                 store = IdentityV2Store.from_payload(payload)
                 model = GuildModel()
@@ -2404,7 +2377,7 @@ class GuildPortraitGrabberQt(QMainWindow):
                     portraitZoom=item.portraitZoom,
                     textOffsetX=item.textOffsetX, textOffsetY=item.textOffsetY,
                     textScale=item.textScale,
-                ) for item in store.members]
+                ) for item in portrait_eligible_members(store.members)]
             else:
                 store = None
                 model = GuildModel()

@@ -301,6 +301,16 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
         self.assertIs(self.window.roster_content_stack.currentWidget(),
                       self.window.roster_scroll)
         cards = {card.member_id: card for card in self.window._roster_cards}
+        sections = [
+            item.widget() for index in range(self.window.roster_layout.count())
+            if (item := self.window.roster_layout.itemAt(index)).widget() is not None
+        ]
+        self.assertTrue(sections)
+        self.assertTrue(all(section.objectName() == "rosterDraftSection"
+                            and section.styleSheet() == "" for section in sections))
+        self.assertIn(
+            "QFrame#rosterDraftSection { background: transparent; border: none; }",
+            self.window.styleSheet())
         self.assertEqual(set(cards), {"m_old", "m_new", "m_empty"})
         self.assertFalse(cards["m_old"].portrait._source.isNull())
         self.assertFalse(cards["m_new"].portrait._source.isNull())
@@ -308,7 +318,7 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
                             cards["m_new"].portrait._source.cacheKey())
         self.assertTrue(cards["m_empty"].portrait._source.isNull())
         self.assertIs(type(cards["m_old"].portrait), checker_qt.CoverImageLabel)
-        self.assertFalse(cards["m_old"].portrait._contain_portrait)
+        self.assertTrue(cards["m_old"].portrait._contain_portrait)
         self.assertIsNotNone(cards["m_old"].class_icon)
         self.assertFalse(cards["m_old"].class_icon.pixmap().isNull())
         self.assertEqual(cards["m_old"].class_icon.toolTip(), "Mage")
@@ -333,7 +343,8 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
                          self.window._format_dkp_value(
                              self.window._v2_roster_by_id["m_old"].raidPoints))
         self.assertIn("Raid", self.window.roster_detail_rank.text())
-        self.assertIn("<img", self.window.roster_detail_class.text())
+        self.assertNotIn("<img", self.window.roster_detail_class.text())
+        self.assertIn("<span", self.window.roster_detail_class.text())
         self.assertIn(checker_qt.CLASS_COLORS["Mage"],
                       self.window.roster_detail_class.text())
         self.assertIn("BiS", self.window.roster_detail_class.toolTip())
@@ -419,7 +430,7 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
         self.assertIn(checker_qt.CLASS_COLORS["Priest"],
                       card.details_label.styleSheet())
         self.assertTrue(card.property("selected"))
-        self.assertIn(":hover", card.styleSheet())
+        self.assertIn("QFrame#rosterDraftCard:hover", self.window.styleSheet())
         card_size = card.size()
         card.set_selected(False)
         card.set_selected(True)
@@ -448,15 +459,17 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
         next(card for card in self.window._roster_cards
              if card.member_id == "m_empty").clicked.emit("m_empty")
         self.assertFalse(self.window.roster_profile_button.isEnabled())
-        self.assertIn("QPushButton:disabled:hover",
-                      self.window.roster_profile_button.styleSheet())
-        self.assertIn("background:#151b22",
-                      self.window.roster_profile_button.styleSheet())
+        self.assertEqual(
+            self.window.roster_profile_button.objectName(), "rosterProfileButton")
+        disabled_style = self.window.styleSheet().split(
+            "QPushButton#rosterProfileButton:disabled:hover", 1)[1].split("}", 1)[0]
+        self.assertIn("background:#151b22", disabled_style)
         next(card for card in self.window._roster_cards
              if card.member_id == "m_old").clicked.emit("m_old")
         self.assertTrue(self.window.roster_profile_button.isEnabled())
-        self.assertIn("background:#594322",
-                      self.window.roster_profile_button.styleSheet())
+        self.assertIn(
+            "QPushButton#rosterProfileButton {background:#594322",
+            self.window.styleSheet())
         self.assertFalse(self.window.identity_v2_dirty)
         self.assertEqual(target.read_bytes(), before)
 
@@ -491,7 +504,7 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
         self.assertTrue(card.portrait._source.isNull())
         self.assertIs(type(card.portrait), checker_qt.CoverImageLabel)
         self.assertFalse(hasattr(card.portrait, "_reward_frame"))
-        self.assertFalse(card.portrait._contain_portrait)
+        self.assertTrue(card.portrait._contain_portrait)
         self.assertIsNotNone(card.class_icon)
         self.assertFalse(card.class_icon.pixmap().isNull())
         self.assertFalse(card.rank_icon.pixmap().isNull())
@@ -500,7 +513,7 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
         self.window.show()
         self.app.processEvents()
         card_size = card.size()
-        self.assertIn(":hover", card.styleSheet())
+        self.assertIn("QFrame#rosterDraftCard:hover", self.window.styleSheet())
         QTest.mouseMove(card, card.rect().center())
         self.app.processEvents()
         self.assertEqual(card.size(), card_size)
@@ -570,7 +583,7 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
         self.assertIsInstance(card, checker_qt.RosterDraftCard)
         self.assertIs(type(card.portrait), checker_qt.CoverImageLabel)
         self.assertFalse(hasattr(card.portrait, "_reward_frame"))
-        self.assertFalse(card.portrait._contain_portrait)
+        self.assertTrue(card.portrait._contain_portrait)
         self.assertIsNotNone(card.class_icon)
         self.assertFalse(card.class_icon.pixmap().isNull())
         self.assertFalse(card.rank_icon.pixmap().isNull())
@@ -620,7 +633,7 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
                           if card.member_id == "m1")
         self.assertIs(type(raid_draft.portrait), checker_qt.CoverImageLabel)
         self.assertFalse(hasattr(raid_draft.portrait, "_reward_frame"))
-        self.assertFalse(raid_draft.portrait._contain_portrait)
+        self.assertTrue(raid_draft.portrait._contain_portrait)
         self.assertIsNotNone(raid_draft.class_icon)
         self.assertFalse(raid_draft.class_icon.pixmap().isNull())
         self.assertFalse(raid_draft.rank_icon.pixmap().isNull())
@@ -963,7 +976,6 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
         self.assertEqual(self.window.identity_v2_store.to_payload(), before)
 
     def test_manual_v2_dkp_refresh_uses_guid_cache_without_saving_project(self):
-        before = self.target.read_bytes()
         self.assertFalse(self.open_path(self.target).called)
         self.window.switch_page("settings")
         self.assertIn("Punktesystem", self.window.dkp_enabled_check.toolTip())
@@ -983,6 +995,9 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
                           return_value=(str(self.root / "ClassicLootManager.lua"), "")):
             self.window.choose_clm_path()
         self.assertTrue(self.window.clm_group.isEnabled())
+        self.window.save_project()
+        self.assertFalse(self.window.identity_v2_dirty)
+        before = self.target.read_bytes()
         self.window.switch_page("rooster")
         self.window.clm_refresh_button.click()
         snapshot = self.window._clm_refresh_service.cached_snapshot
@@ -992,6 +1007,7 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
             available_dkp_by_member(self.window.identity_v2_store, snapshot.balances),
         )
         self.assertEqual(self.window._v2_dkp_projection.refreshed_at, snapshot.refreshed_at)
+        self.assertTrue(self.window.identity_v2_dirty)
         self.assertIn(snapshot.refreshed_at.astimezone().strftime("%Y-%m-%d %H:%M"),
                       self.window.clm_status_label.text())
         for member_id, item in self.window._v2_roster_by_id.items():
@@ -1024,6 +1040,27 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
         saved = load_identity_v2(self.target)
         self.assertEqual((saved.pointMode, saved.guildName, saved.realm),
                          ("eternal_dkp", "Bierstube", "Stitches"))
+        self.assertEqual(saved.currentDkpByMemberId,
+                         dkp_projection.available_by_member)
+        self.assertEqual(saved.currentDkpRefreshedAt,
+                         snapshot.refreshed_at.isoformat())
+        with patch.object(checker_qt.ClmDkpRefreshService, "refresh_for_project",
+                          side_effect=AssertionError("Lua beim Projektstart gelesen")):
+            self.assertFalse(self.open_path(self.target).called)
+        self.assertEqual(self.window._v2_dkp_projection.available_by_member,
+                         saved.currentDkpByMemberId)
+        self.assertEqual(self.window._v2_dkp_projection.refreshed_at,
+                         snapshot.refreshed_at)
+        self.assertIn("Gespeicherter DKP-Stand", self.window.clm_status_label.text())
+        other_source = self.root / "Andere" / "ClassicLootManager.lua"
+        other_source.parent.mkdir()
+        other_source.write_bytes((self.root / "ClassicLootManager.lua").read_bytes())
+        with patch.object(checker_qt.QFileDialog, "getOpenFileName",
+                          return_value=(str(other_source), "")):
+            self.window.choose_clm_path()
+        self.assertEqual(self.window.identity_v2_store.currentDkpByMemberId, {})
+        self.assertEqual(self.window._v2_dkp_projection.available_by_member, {})
+        self.assertTrue(self.window.identity_v2_dirty)
 
     def test_settings_rebuilds_v2_raid_points_only_on_click(self):
         self.assertFalse(self.open_path(self.target).called)

@@ -127,7 +127,7 @@ def apply_raid_dialog(
     for player_id in sorted(bench_player_ids - occupied):
         player = players.get(player_id)
         member = members.get(player.mainMemberId) if player else None
-        if member is None or member.lifeStatus != "active":
+        if member is None or member.lifeStatus != "active" or member.irrelevant:
             raise ValueError("Bench benötigt einen aktiven Main desselben Spielers.")
         if any(entry.raidId == raid_id and entry.memberId == member.memberId
                for entry in changed.attendance):

@@ -6,7 +6,7 @@ This module deliberately reuses the established domain/data logic from
 Tkinter checker remains included as a fallback while the Qt migration is
 validated locally.
 
-Version: 0.12.1
+Version: 0.12.2
 """
 from __future__ import annotations
 
@@ -328,8 +328,7 @@ except ImportError:
 
 CHECKER_BANNER_HEIGHT = 200
 CHECKER_BANNER_MAX_COVER_WIDTH = 2200
-CHECKER_BANNER_FOCAL_POINT = (0.55, 0.22)
-CHECKER_BANNER_OVERLAY_ALPHA = 56  # ~22 %, matching the legacy banner darkening
+CHECKER_BANNER_FOCAL_POINT = (0.55, 0.12)
 MEMBER_DETAIL_PORTRAIT_SIZE = 220
 MEMBER_DETAIL_TABS_MIN_HEIGHT = 205
 MEMBER_DETAIL_SCROLL_HEIGHT_TOLERANCE = 64
@@ -351,14 +350,17 @@ try:
     from app.qt_theme import (
         BG, PANEL, PANEL_ALT, PANEL_RAISED, BORDER, BORDER_SOFT, TEXT,
         MUTED, GOLD, GOLD_BRIGHT, GREEN, RED, BLUE,
-        decorative_font_family,
+        decorative_font_family, GLOBAL_STYLE_SHEET,
     )
 except ImportError:
     from qt_theme import (  # type: ignore
         BG, PANEL, PANEL_ALT, PANEL_RAISED, BORDER, BORDER_SOFT, TEXT,
         MUTED, GOLD, GOLD_BRIGHT, GREEN, RED, BLUE,
-        decorative_font_family,
+        decorative_font_family, GLOBAL_STYLE_SHEET,
     )
+
+# Compatibility name for existing Qt callers and tests; there is one QSS source.
+STYLE_SHEET = GLOBAL_STYLE_SHEET
 
 CLASS_DISPLAY_KEYS = {
     "Druid": "druid", "Hunter": "hunter", "Mage": "mage",
@@ -372,258 +374,6 @@ def profile_class_display(value: object) -> str:
     key = CLASS_DISPLAY_KEYS.get(normalized)
     return tr(f"classes.{key}") if key else normalized
 
-
-STYLE_SHEET = f"""
-QWidget {{
-    background: {BG};
-    color: {TEXT};
-    font-family: "Segoe UI";
-    font-size: 10pt;
-}}
-QMainWindow {{ background: {BG}; }}
-QWidget#header {{
-    background: transparent;
-    border-bottom: 1px solid #6d5934;
-}}
-QFrame#navBar {{
-    background: #10161d;
-    border-bottom: 1px solid {BORDER};
-}}
-QFrame[card="true"] {{
-    background: {PANEL};
-    border: 1px solid {BORDER};
-    border-radius: 7px;
-}}
-QFrame[innerCard="true"] {{
-    background: {PANEL_ALT};
-    border: 1px solid {BORDER_SOFT};
-    border-radius: 6px;
-}}
-QFrame#rosterSection {{
-    background: #131922;
-    border: 1px solid #5b4930;
-    border-radius: 3px;
-}}
-QLabel#rosterSectionTitle {{
-    color: #e0bd72;
-    background: transparent;
-    border: none;
-    font-weight: 700;
-}}
-QLabel#appTitle {{ color: #f3ead7; font-size: 24pt; font-weight: 600; background: transparent; }}
-QLabel#appMeta {{ color: #d0d5da; font-size: 9pt; background: transparent; }}
-QLabel#sectionTitle {{ color: #f2ede3; font-size: 15pt; font-weight: 600; }}
-QLabel#subtle {{ color: {MUTED}; }}
-QLabel#memberName {{ color: #f5ead2; font-size: 18pt; font-weight: 600; }}
-QLabel#statusPill {{
-    background: #202a34;
-    border: 1px solid {BORDER};
-    border-radius: 9px;
-    padding: 3px 8px;
-    color: #d8e0e7;
-}}
-QPushButton {{
-    background: {PANEL_RAISED};
-    color: {TEXT};
-    border: 1px solid #394654;
-    border-radius: 5px;
-    padding: 7px 12px;
-    font-weight: 600;
-}}
-QPushButton:hover {{ border-color: #6d7d8e; background: #26323e; }}
-QPushButton:pressed {{ background: #111820; }}
-QPushButton:disabled {{ color: #68727c; background: #151b22; border-color: #252d35; }}
-QPushButton:focus {{ border-color: #c7a265; }}
-QToolButton {{
-    background: {PANEL_RAISED}; color: {TEXT}; border: 1px solid #394654;
-    border-radius: 5px; padding: 4px 8px; font-weight: 600;
-}}
-QToolButton:hover {{ background: #26323e; border-color: #6d7d8e; }}
-QToolButton:pressed {{ background: #111820; }}
-QToolButton:disabled {{ color: #68727c; background: #151b22; border-color: #252d35; }}
-QToolButton:focus {{ border-color: #c7a265; }}
-QToolButton:checked {{ background: #302b22; border-color: #80643f; color: #f5dfb1; }}
-QPushButton[primary="true"] {{ background: #344e42; border-color: #547762; }}
-QPushButton[primary="true"]:hover {{ background: #3c5a4b; border-color: #6e987d; }}
-QPushButton[primary="true"]:pressed {{ background: #263b31; border-color: #6e987d; }}
-QPushButton[primary="true"]:disabled {{ color: #68727c; background: #151b22; border-color: #252d35; }}
-QPushButton[danger="true"] {{ background: #4a2b2e; border-color: #74464a; }}
-QPushButton[danger="true"]:hover {{ background: #5a3236; border-color: #9b5b60; }}
-QPushButton[danger="true"]:pressed {{ background: #3a2225; border-color: #9b5b60; }}
-QPushButton[danger="true"]:disabled {{ color: #68727c; background: #151b22; border-color: #252d35; }}
-QPushButton[multiSelected="true"] {{ background: #8a5a20; color: #fff0cc; border-color: #e2a340; }}
-QPushButton[multiSelected="true"]:hover {{ background: #a06b29; border-color: #f0bc64; }}
-QPushButton[multiSelected="true"]:pressed {{ background: #704719; border-color: #f0bc64; }}
-QPushButton[multiSelected="true"]:disabled {{ background: #30291f; color: #817a6d; border-color: #544532; }}
-QPushButton#viewSwitchButton {{
-    min-height: 25px;
-    padding: 3px 10px;
-    border-radius: 3px;
-}}
-QPushButton#viewSwitchButton:checked {{
-    background: #302b22;
-    border-color: #80643f;
-    color: #f5dfb1;
-    font-weight: 700;
-}}
-QPushButton#viewSwitchButton:hover {{ background: #292a29; border-color: #9a7a49; }}
-QPushButton#viewSwitchButton:checked:hover {{ background: #302b22; border-color: #b9955b; }}
-QPushButton#viewSwitchButton:pressed {{ background: #1a1e23; }}
-QPushButton#viewSwitchButton:disabled {{ background: #151b22; color: #68727c; border-color: #252d35; }}
-QPushButton#navButton {{
-    background: transparent;
-    border: none;
-    border-bottom: 3px solid transparent;
-    border-radius: 0px;
-    padding: 11px 18px 9px 18px;
-    color: #aeb8c2;
-    font-size: 10pt;
-}}
-QPushButton#navButton:hover {{ color: #d8e5ee; background: #1b2a39; }}
-QPushButton#navButton:checked {{
-    color: #f3e3c2;
-    border-bottom-color: {GOLD};
-    background: #18212a;
-}}
-QPushButton#navButton:checked:hover {{ background: #18212a; color: #f3e3c2; }}
-QPushButton#navButton:focus {{ background: #1b2a39; }}
-QPushButton#navButton:disabled {{ color: #606b76; background: transparent; }}
-QPushButton#subnavButton {{
-    background: #171f28;
-    border: 1px solid #2d3844;
-    color: #aeb8c2;
-    padding: 5px 10px;
-}}
-QPushButton#subnavButton[v2ManagementTab="true"] {{ padding: 7px 18px; }}
-QPushButton#subnavButton:checked {{
-    color: #f2e6cf;
-    border-color: #806a3d;
-    background: #25271f;
-}}
-QPushButton#subnavButton:hover {{ background: #202d3b; border-color: #536779; color: #e0e9ef; }}
-QPushButton#subnavButton:checked:hover {{ background: #25271f; border-color: #a8884f; color: #f2e6cf; }}
-QPushButton#subnavButton:pressed {{ background: #151c24; }}
-QPushButton#subnavButton:disabled {{ background: #151b22; border-color: #252d35; color: #68727c; }}
-QPushButton#subnavButton:focus {{ border-color: #c7a265; }}
-QFrame#graveZoomBar {{
-    background: rgba(12, 20, 28, 220);
-    border: 1px solid #475c6f;
-    border-radius: 5px;
-}}
-QFrame#rosterZoomBar {{
-    background: rgba(12, 20, 28, 220);
-    border: 1px solid #475c6f;
-    border-radius: 5px;
-}}
-QFrame#rosterZoomBar[modernView="true"] {{ border-color:#80643f; }}
-QSlider::groove:horizontal {{
-    height: 5px; background: #26313c; border-radius: 2px;
-}}
-QSlider::sub-page:horizontal {{
-    background: #8e7442; border-radius: 2px;
-}}
-QSlider::handle:horizontal {{
-    background: #d4b36b; border: 1px solid #6f5a34; width: 14px; margin: -5px 0; border-radius: 7px;
-}}
-QLineEdit, QComboBox, QSpinBox, QTextEdit {{
-    background: #10161d;
-    color: {TEXT};
-    border: 1px solid #35414d;
-    border-radius: 5px;
-    padding: 6px;
-    selection-background-color: #302b22;
-    selection-color: #f5dfb1;
-}}
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QTextEdit:focus {{ border-color: {GOLD}; }}
-QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QTextEdit:hover {{ border-color: #6b7885; }}
-QLineEdit:focus:hover, QComboBox:focus:hover, QSpinBox:focus:hover, QTextEdit:focus:hover {{ border-color: {GOLD}; }}
-QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QTextEdit:disabled {{ color: #68727c; background: #151b22; border-color: #252d35; }}
-QComboBox QAbstractItemView {{
-    background: #171e26;
-    color: {TEXT};
-    border: 1px solid #3c4855;
-    selection-background-color: #302b22;
-    selection-color: #f5dfb1;
-    padding: 4px;
-}}
-QComboBox QAbstractItemView::item {{
-    min-height: 26px;
-    padding: 4px 8px;
-}}
-QPushButton#detailAction {{
-    padding: 4px 8px;
-    min-height: 24px;
-}}
-QCheckBox {{ spacing: 7px; }}
-QCheckBox::indicator {{ width: 16px; height: 16px; }}
-QCheckBox::indicator:hover {{ border: 1px solid #c7a265; }}
-QCheckBox::indicator:checked, QRadioButton::indicator:checked {{
-    background: #80643f; border: 1px solid #c7a265;
-}}
-QTableWidget::indicator {{ width: 16px; height: 16px; border: 1px solid #59636c; background: #17212a; }}
-QTableWidget::indicator:checked {{ background: #80643f; border-color: #c7a265; }}
-QTableWidget {{
-    background: #11171e;
-    alternate-background-color: #141b23;
-    border: 1px solid {BORDER};
-    gridline-color: #202a34;
-    selection-background-color: #302b22;
-    selection-color: #f5dfb1;
-    outline: 0;
-}}
-QTableWidget::item {{ padding: 6px; border-bottom: 1px solid #202a34; }}
-QTableWidget::item:selected {{ background:#302b22;color:#f5dfb1; }}
-QHeaderView::section:hover {{ background: #293542; color: #f1d79f; }}
-QHeaderView::section {{
-    background: #202830;
-    color: #e1c183;
-    border: none;
-    border-right: 1px solid #584832;
-    border-bottom: 1px solid #80643f;
-    padding: 7px;
-    font-weight: 600;
-}}
-QScrollArea {{ border: none; background: transparent; }}
-QScrollBar:vertical {{ background: #10151b; width: 12px; margin: 0; }}
-QScrollBar::handle:vertical {{ background: #3a4652; min-height: 28px; border-radius: 5px; }}
-QScrollBar::handle:vertical:hover {{ background: #52606d; }}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
-QScrollBar:horizontal {{ background: #10151b; height: 12px; }}
-QScrollBar::handle:horizontal {{ background: #3a4652; min-width: 28px; border-radius: 5px; }}
-QTabWidget::pane {{
-    border: 1px solid {BORDER};
-    background: {PANEL};
-    top: -1px;
-}}
-QTabBar::tab {{
-    background: #171f28;
-    border: 1px solid #303b47;
-    border-top: 2px solid transparent;
-    border-bottom: none;
-    padding: 8px 13px;
-    color: #aeb8c2;
-}}
-QTabBar::tab:selected {{
-    color: #f3e6cd;
-    background: #202932;
-    border-top-color: {GOLD};
-}}
-QTabBar::tab:hover {{ background: #202d3b; color: #e0e9ef; }}
-QTabBar::tab:selected:hover {{ background: #202932; color: #f3e6cd; }}
-QTabBar::tab:disabled {{ background: #151b22; color: #68727c; }}
-QSplitter::handle {{ background: #26313c; width: 2px; }}
-QStatusBar {{ background: #10161d; color: {MUTED}; border-top: 1px solid #29333e; }}
-QMenuBar {{ background: #10161d; color: #dce3e9; }}
-QMenuBar::item:selected {{ background: #302b22; color:#f5dfb1; }}
-QMenu {{ background: #161d25; color: #e8edf1; border: 1px solid #394450; }}
-QMenu::item:selected {{ background: #302b22; color:#f5dfb1; }}
-QToolTip {{
-    background-color:#171e26;
-    color:#e8edf1;
-    border:1px solid #80643f;
-    padding:4px 6px;
-}}
-"""
 
 
 def set_button_role(button: QPushButton, *, primary: bool = False, danger: bool = False) -> QPushButton:
@@ -738,7 +488,7 @@ def archive_portrait(model: GuildModel, member: Member) -> Path | None:
 
 
 class HeaderWidget(QWidget):
-    """Fokussiertes, entprelltes Banner-Cover wie im Qt-Portrait-Grabber."""
+    """Keep the existing guild panorama visible beside a compact identity zone."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -749,6 +499,7 @@ class HeaderWidget(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._rendered = QPixmap()
         self._rendered_size = QSize()
+        self._rendered_image_left = 0
         self._pending_size = QSize()
         self._resize_timer = QTimer(self)
         self._resize_timer.setSingleShot(True)
@@ -766,17 +517,17 @@ class HeaderWidget(QWidget):
             return
         if target == self._rendered_size:
             return
-        cover_size = QSize(min(target.width(), CHECKER_BANNER_MAX_COVER_WIDTH), target.height())
+        # Keep an identity area at the left while retaining the source aspect ratio.
+        image_width = max(1, min(round(target.width() * 0.78),
+                                 CHECKER_BANNER_MAX_COVER_WIDTH))
         scaled = self._source.scaled(
-            cover_size,
+            QSize(image_width, target.height()),
             Qt.AspectRatioMode.KeepAspectRatioByExpanding,
             Qt.TransformationMode.SmoothTransformation,
         )
-        if scaled.width() <= target.width():
-            left = (target.width() - scaled.width()) // 2
-        else:
-            left = -round((scaled.width() - target.width()) * CHECKER_BANNER_FOCAL_POINT[0])
-        top = -round((scaled.height() - target.height()) * CHECKER_BANNER_FOCAL_POINT[1])
+        left = max(0, target.width() - scaled.width())
+        top = -round(max(0, scaled.height() - target.height())
+                     * CHECKER_BANNER_FOCAL_POINT[1])
         rendered = QPixmap(target)
         rendered.fill(QColor(BG))
         painter = QPainter(rendered)
@@ -784,28 +535,38 @@ class HeaderWidget(QWidget):
         painter.end()
         self._rendered = rendered
         self._rendered_size = target
+        self._rendered_image_left = left
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802 - Qt override
         super().paintEvent(event)
+        from PySide6.QtGui import QLinearGradient
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         rect = self.rect()
         if not self._rendered.isNull():
-            # Zwischen Resize-Events bleibt das zuletzt passende, unverzerrte
-            # Cover sichtbar, bis der entprellte Cache ersetzt wird.
             painter.drawPixmap(0, 0, self._rendered)
-            # Keep text readable without changing the source image itself.
-            painter.fillRect(rect, QColor(16, 20, 25, CHECKER_BANNER_OVERLAY_ALPHA))
+            fade_end = min(rect.width(), max(260, self._rendered_image_left + 105))
+            fade = QLinearGradient(0, 0, fade_end, 0)
+            fade.setColorAt(0.0, QColor(11, 16, 23, 245))
+            opaque_stop = max(0.0, min(0.95,
+                                      (self._rendered_image_left - 18) / fade_end))
+            fade.setColorAt(opaque_stop, QColor(11, 16, 23, 240))
+            fade.setColorAt(1.0, QColor(11, 16, 23, 0))
+            painter.fillRect(rect, fade)
         else:
-            # Graceful fallback if the optional banner asset is missing.
-            from PySide6.QtGui import QLinearGradient
             gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
             gradient.setColorAt(0.0, QColor("#111922"))
             gradient.setColorAt(0.55, QColor("#17212b"))
             gradient.setColorAt(1.0, QColor("#0d1218"))
             painter.fillRect(rect, gradient)
-        painter.setPen(QPen(QColor("#715d39"), 1))
+        lower = rect.adjusted(0, max(0, rect.height() - 42), 0, 0)
+        edge = QLinearGradient(0, lower.top(), 0, lower.bottom())
+        edge.setColorAt(0.0, QColor(13, 19, 26, 0))
+        edge.setColorAt(1.0, QColor(13, 19, 26, 175))
+        painter.fillRect(lower, edge)
+        painter.setPen(QPen(QColor("#806744"), 1))
         painter.drawLine(0, rect.height() - 1, rect.width(), rect.height() - 1)
         painter.end()
 
@@ -1397,33 +1158,6 @@ class GraveyardView(QWidget):
 
         self.zoom_bar = QFrame(self)
         self.zoom_bar.setObjectName("graveZoomBar")
-        self.zoom_bar.setStyleSheet("""
-            QFrame#graveZoomBar {
-                background:#151e25;border:1px solid #80643f;border-radius:6px;
-            }
-            QFrame#graveZoomBar QLabel {background:transparent;border:none;color:#e1c183;}
-            QFrame#graveZoomBar QPushButton {
-                background:#202a33;color:#f0dfbf;border:1px solid #584832;
-                border-radius:4px;padding:0;font-weight:700;
-            }
-            QFrame#graveZoomBar QPushButton:hover {background:#302b22;border-color:#c7a265;}
-            QFrame#graveZoomBar QPushButton:pressed {background:#584832;}
-            QFrame#graveZoomBar QPushButton:disabled {background:#151b22;color:#68727c;border-color:#252d35;}
-            QFrame#graveZoomBar QPushButton:focus {border-color:#e0bd72;}
-            QFrame#graveZoomBar QSlider::groove:horizontal {
-                height:5px;background:#28323b;border:1px solid #584832;border-radius:2px;
-            }
-            QFrame#graveZoomBar QSlider::sub-page:horizontal {
-                background:#80643f;border-radius:2px;
-            }
-            QFrame#graveZoomBar QSlider::handle:horizontal {
-                width:14px;margin:-5px 0;background:#e1c183;
-                border:1px solid #c7a265;border-radius:7px;
-            }
-            QFrame#graveZoomBar QSlider::handle:horizontal:hover {
-                background:#f5dfb1;border-color:#e1c183;
-            }
-        """)
         self.zoom_bar.setFixedSize(300, 46)
         row = QHBoxLayout(self.zoom_bar)
         row.setContentsMargins(8, 6, 8, 6)
@@ -1833,14 +1567,6 @@ class RosterCard(ClickableFrame):
         self.setObjectName("rosterClassicCard")
         self.setProperty("selected", False)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-        self.setStyleSheet("""
-            QFrame#rosterClassicCard {border:1px solid #394654;border-radius:5px;}
-            QFrame#rosterClassicCard:hover {border-color:#ae8245;}
-            QFrame#rosterClassicCard[selected="true"] {border-color:#e8c37c;}
-            QFrame#rosterClassicCard[selected="true"]:hover {border-color:#ffe0a0;}
-            QFrame#rosterClassicCard[pressed="true"] {border-color:#c99c59;background:#202a34;}
-            QFrame#rosterClassicCard[selected="true"][pressed="true"] {border-color:#ffe0a0;background:#2d271e;}
-        """)
         factor = max(0.60, min(1.40, int(zoom_percent) / 100.0))
         card_width = max(122, round(self.BASE_CARD_WIDTH * factor))
         portrait_width = max(104, card_width - max(10, round(18 * factor)))
@@ -1857,6 +1583,7 @@ class RosterCard(ClickableFrame):
         portrait_surface.setFixedSize(portrait_width, portrait_height)
         portrait_surface.setStyleSheet("background:transparent;border:none;")
         self.portrait = CoverImageLabel(tr("checker.missing_portrait"), portrait_surface)
+        self.portrait.set_contain_portrait(True)
         self.portrait.setGeometry(0, 0, portrait_width, portrait_height)
         self.portrait.setFixedSize(portrait_width, portrait_height)
         self.portrait.set_source(
@@ -2089,20 +1816,13 @@ class ManagementPortraitContainer(RewardPortraitContainer):
         self._apply_badge_geometry()
 
 
-def set_roster_status(label: QLabel, role: str) -> None:
-    """Only presentation; callers supply the existing status meaning."""
-    colors = {
-        "positive": ("#203d2c", "#6e9c78", "#e0eee1"),
-        "negative": ("#45292e", "#aa6b70", "#f0d9dc"),
-        "warning": ("#46371f", "#af8c50", "#f4e3bc"),
-        "neutral": ("#202a33", "#59636c", "#ccd2d7"),
-    }
-    bg, border, text = colors.get(role, colors["neutral"])
-    label.setProperty("rosterStatus", role)
-    label.setStyleSheet(
-        f"background:{bg};color:{text};border:1px solid {border};"
-        "border-radius:7px;padding:3px 7px;font-size:9pt;"
-    )
+def set_roster_status(label: QLabel, role: str, *, classic: bool = False) -> None:
+    """Bind an existing status meaning to the central QSS."""
+    label.setProperty("rosterStatus", "" if classic else role)
+    label.setProperty("classicRaidStatus", role if classic else "")
+    label.style().unpolish(label)
+    label.style().polish(label)
+    label.update()
 
 
 class RosterRoleIcon(QWidget):
@@ -2164,29 +1884,18 @@ class RosterDraftCard(ClickableFrame):
         self.setObjectName("rosterDraftCard")
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         self.setProperty("selected", False)
-        self.setStyleSheet("""
-            QFrame#rosterDraftCard {
-                background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1c2831,stop:1 #131a20);
-                border:2px solid #514736;border-radius:5px;
-            }
-            QFrame#rosterDraftCard:hover {border-color:#ae8245;background:#263038;}
-            QFrame#rosterDraftCard[selected="true"] {border-color:#e8c37c;background:#352c20;}
-            QFrame#rosterDraftCard[selected="true"]:hover {border-color:#ffe0a0;}
-            QFrame#rosterDraftCard[pressed="true"] {border-color:#c99c59;background:#1d272e;}
-            QFrame#rosterDraftCard[selected="true"][pressed="true"] {border-color:#ffe0a0;background:#2d271e;}
-            QLabel {background:transparent;border:none;}
-        """)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 8)
         layout.setSpacing(5)
         self.portrait = CoverImageLabel(tr("checker.missing_portrait"))
+        self.portrait.set_contain_portrait(True)
         self.portrait.setFixedSize(portrait_width, portrait_height)
         self.portrait.set_source(
             portrait_path if member_id is not None else member_portrait_path(model, member))
         self.portrait.clicked.connect(lambda: self.clicked.emit(resolved_id))
         layout.addWidget(self.portrait, 0, Qt.AlignmentFlag.AlignHCenter)
         nameplate = QWidget()
-        nameplate.setStyleSheet("background:#211c17;border:none;")
+        nameplate.setObjectName("rosterNameplate")
         name_row = QHBoxLayout(nameplate)
         name_row.setContentsMargins(4, 3, 4, 3)
         name_row.setSpacing(4)
@@ -2208,7 +1917,7 @@ class RosterDraftCard(ClickableFrame):
         self.name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.name_label.setMaximumWidth(max(80, self.card_width - 52))
         self.name_label.setToolTip(member.name)
-        self.name_label.setStyleSheet("color:#f5e2ba;font-size:11pt;font-weight:700;")
+        self.name_label.setObjectName("rosterDraftName")
         name_row.addWidget(self.name_label)
         name_row.addStretch(1)
         layout.addWidget(nameplate)
@@ -2239,7 +1948,7 @@ class RosterDraftCard(ClickableFrame):
         )
         self.secondary_label.setWordWrap(True)
         self.secondary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.secondary_label.setStyleSheet("color:#a9b1b9;font-size:9pt;")
+        self.secondary_label.setObjectName("rosterDraftSecondary")
         layout.addWidget(self.secondary_label)
         self.status_badge = QLabel(raid_status_display(member.raidStatus or ""))
         self.status_badge.setWordWrap(True)
@@ -2817,38 +2526,7 @@ class BulkRaidImportDialog(QDialog):
         self._refreshing_table = False
         self.setWindowTitle(tr("raids.bulk_title"))
         self.setObjectName("bulkRaidImportDialog")
-        self.setStyleSheet(STYLE_SHEET + """
-            QDialog#bulkRaidImportDialog QTableWidget::item:selected {
-                background:#302b22;color:#f5dfb1;
-            }
-            QDialog#bulkRaidImportDialog QHeaderView::section {
-                background:#202830;color:#e1c183;
-                border-right:1px solid #584832;border-bottom:1px solid #80643f;
-            }
-            QDialog#bulkRaidImportDialog QListWidget#bulkParticipantList {
-                background:#11171e;alternate-background-color:#141b23;
-                border:1px solid #394654;selection-background-color:#302b22;
-            }
-            QDialog#bulkRaidImportDialog QListWidget#bulkParticipantList::item {
-                padding:4px 7px;border-bottom:1px solid #202a34;
-            }
-            QDialog#bulkRaidImportDialog QCheckBox::indicator:checked {
-                background:#80643f;border:1px solid #c7a265;
-            }
-            QDialog#bulkRaidImportDialog QTableWidget QComboBox {
-                background:#10161d;color:#e6e2d8;border:1px solid #584832;
-                border-radius:4px;padding:4px 7px;
-            }
-            QDialog#bulkRaidImportDialog QTableWidget QComboBox:focus {
-                border-color:#c7a265;
-            }
-            QDialog#bulkRaidImportDialog QComboBox QAbstractItemView {
-                background:#171e26;selection-background-color:#302b22;
-                selection-color:#f5dfb1;border:1px solid #584832;
-            }
-            QDialog#bulkRaidImportDialog QLineEdit:focus,
-            QDialog#bulkRaidImportDialog QComboBox:focus {border-color:#c7a265;}
-        """)
+        self.setStyleSheet(GLOBAL_STYLE_SHEET)
         self.setMinimumSize(900, 620)
         layout = QVBoxLayout(self)
         intro = QLabel(tr("raids.bulk_preview_help", folder=str(folder)))
@@ -3590,19 +3268,6 @@ class PlayerProfilePage(QWidget):
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setObjectName("profileLegacy")
-        scroll.setStyleSheet("""
-            QWidget#profileLegacy QTableWidget {
-                selection-background-color:#31485e;selection-color:white;
-            }
-            QWidget#profileLegacy QTableWidget::item:selected {background:#31485e;color:white;}
-            QWidget#profileLegacy QHeaderView::section {
-                background:#1d2630;color:#dce3e9;
-                border-right:1px solid #303b47;border-bottom:1px solid #424d59;
-            }
-            QWidget#profileLegacy QComboBox QAbstractItemView {
-                selection-background-color:#354b61;selection-color:white;
-            }
-        """)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         content = QWidget(scroll)
         layout = QVBoxLayout(content)
@@ -3880,31 +3545,6 @@ class PlayerProfileDraftPage(PlayerProfilePage):
     def __init__(self, parent: QWidget | None = None) -> None:
         QWidget.__init__(self, parent)
         self.setObjectName("profileDraft")
-        self.setStyleSheet("""
-            QWidget#profileDraft {background:#11181f;}
-            QWidget#profileDraft QWidget {background:transparent;}
-            QWidget#profileDraft QFrame[card="true"] {
-                background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #17212a,stop:1 #11181f);
-                border:1px solid #80643f;border-radius:6px;
-            }
-            QWidget#profileDraft QLabel {border:none;}
-            QWidget#profileDraft QLabel#sectionTitle {color:#e1c183;font-size:13pt;}
-            QWidget#profileDraft QLabel#memberName {color:#f5dfb1;font-size:23pt;font-weight:700;}
-            QWidget#profileDraft QComboBox {background:#11181f;border:1px solid #584832;}
-            QWidget#profileDraft QComboBox QAbstractItemView {background:#17212a;}
-            QWidget#profileDraft QPushButton[family="true"] {
-                background:#151e25;border:1px solid #584832;text-align:left;
-                padding:12px 16px;min-width:160px;
-            }
-            QWidget#profileDraft QPushButton[family="true"]:hover {background:#202a33;border-color:#c7a265;}
-            QWidget#profileDraft QPushButton[family="true"]:checked {background:#302b22;border:2px solid #c7a265;}
-            QWidget#profileDraft QTableWidget {
-                background:#11181f;alternate-background-color:#17212a;border:1px solid #584832;
-                selection-background-color:#302b22;selection-color:#f5dfb1;
-            }
-            QWidget#profileDraft QTableWidget::item:selected {background:#302b22;color:#f5dfb1;}
-            QWidget#profileDraft QHeaderView::section {background:#202830;color:#e1c183;border-color:#584832;}
-        """)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea()
@@ -3984,22 +3624,6 @@ class PlayerProfileDraftPage(PlayerProfilePage):
         navigation = QFrame()
         navigation.setObjectName("profileCharacterNavigation")
         navigation.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-        navigation.setStyleSheet("""
-            QFrame#profileCharacterNavigation {
-                background:#151e25;border:1px solid #584832;border-radius:5px;
-            }
-            QFrame#profileCharacterNavigation QPushButton {
-                background:transparent;color:#e1c183;border:none;border-radius:3px;padding:0;
-            }
-            QFrame#profileCharacterNavigation QPushButton:hover {background:#302b22;color:#f5dfb1;}
-            QFrame#profileCharacterNavigation QPushButton:pressed {background:#584832;}
-            QFrame#profileCharacterNavigation QPushButton:disabled {color:#59636c;background:transparent;}
-            QFrame#profileCharacterNavigation QComboBox {
-                background:transparent;color:#f0dfbf;border:none;
-                border-left:1px solid #584832;border-right:1px solid #584832;
-                border-radius:0;padding:0 10px;
-            }
-        """)
         selection = QHBoxLayout(navigation)
         selection.setContentsMargins(3, 3, 3, 3)
         selection.setSpacing(0)
@@ -4266,7 +3890,7 @@ class GuildGearCheckerQt(QMainWindow):
         )
 
         self._load_qt_font()
-        self.setStyleSheet(STYLE_SHEET)
+        self.setStyleSheet(GLOBAL_STYLE_SHEET)
         self._build_menu()
         self._build_ui()
         self._restore_geometry()
@@ -4374,34 +3998,46 @@ class GuildGearCheckerQt(QMainWindow):
 
         header = HeaderWidget()
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(18, 14, 18, 12)
-        title_box = QVBoxLayout()
+        header_layout.setContentsMargins(26, 18, 22, 15)
+        header_layout.setSpacing(16)
+        identity = QWidget()
+        identity.setObjectName("headerIdentity")
+        identity.setMaximumWidth(285)
+        title_box = QVBoxLayout(identity)
+        title_box.setContentsMargins(0, 0, 0, 0)
+        title_box.setSpacing(3)
         self.banner_title = QLabel(tr("checker.title"))
         self.banner_title.setObjectName("appTitle")
-        font = QFont(self.decorative_font_family, 24)
-        self.banner_title.setFont(font)
+        self.banner_title.setFont(QFont(self.decorative_font_family, 21))
+        self.banner_title.setStyleSheet(
+            f'font-family: "{self.decorative_font_family}";')
+        self.banner_title.setFixedHeight(42)
         title_box.addWidget(self.banner_title)
         self.project_label = QLabel("")
         self.project_label.setObjectName("appMeta")
+        self.project_label.setWordWrap(True)
+        self.project_label.setMaximumHeight(38)
         title_box.addWidget(self.project_label)
-        header_layout.addLayout(title_box)
+        version = QLabel(f"GuildGearChecker · v{APP_VERSION}")
+        version.setObjectName("headerVersion")
+        title_box.addWidget(version)
+        header_layout.addWidget(identity, 0, Qt.AlignmentFlag.AlignVCenter)
         header_layout.addStretch(1)
         grabber_button = QPushButton(tr("checker.portrait_grabber"))
+        grabber_button.setObjectName("headerGrabberButton")
+        grabber_button.setMinimumHeight(40)
+        grabber_button.setMinimumWidth(164)
         grabber_button.setToolTip(tr("checker.grabber_handoff"))
         grabber_button.clicked.connect(self.open_portrait_grabber)
         self.grabber_button = grabber_button
-        header_layout.addWidget(grabber_button)
-        version = QLabel(f"Qt · {APP_VERSION}\nEU · Stitches · Classic Era")
-        version.setObjectName("appMeta")
-        version.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        header_layout.addWidget(version)
+        header_layout.addWidget(grabber_button, 0, Qt.AlignmentFlag.AlignBottom)
         outer.addWidget(header)
 
         nav = QFrame()
         nav.setObjectName("navBar")
         nav_layout = QHBoxLayout(nav)
-        nav_layout.setContentsMargins(14, 0, 14, 0)
-        nav_layout.setSpacing(2)
+        nav_layout.setContentsMargins(18, 0, 18, 0)
+        nav_layout.setSpacing(0)
         for key, label in (
             ("rooster", tr("tabs.roster")),
             ("graveyard", tr("tabs.graveyard")),
@@ -4683,23 +4319,6 @@ class GuildGearCheckerQt(QMainWindow):
     def _build_member_page(self) -> QWidget:
         page = QWidget()
         page.setObjectName("managementPage")
-        page.setStyleSheet("""
-            QWidget#managementPage {background:#11181f;}
-            QWidget#managementPage QLabel#sectionTitle {color:#f5dfb1;background:transparent;}
-            QWidget#managementPage QTableWidget {
-                background:#11181f;alternate-background-color:#17212a;
-                border:1px solid #584832;gridline-color:#29333c;
-                selection-background-color:#302b22;selection-color:#f5dfb1;
-            }
-            QWidget#managementPage QTableWidget::item:selected {background:#302b22;color:#f5dfb1;}
-            QWidget#managementPage QHeaderView::section {
-                background:#202830;color:#e1c183;
-                border-right:1px solid #584832;border-bottom:1px solid #80643f;
-            }
-            QWidget#managementPage QPushButton#subnavButton:checked {
-                background:#302b22;border-color:#80643f;color:#f5dfb1;
-            }
-        """)
         layout = QVBoxLayout(page)
         layout.setContentsMargins(14, 12, 14, 14)
         layout.setSpacing(9)
@@ -4792,22 +4411,6 @@ class GuildGearCheckerQt(QMainWindow):
     def _build_detail_panel(self) -> QWidget:
         panel = QFrame()
         panel.setObjectName("managementCharacterSheet")
-        panel.setStyleSheet("""
-            QFrame#managementCharacterSheet {
-                background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #17212a,stop:1 #11181f);
-                border:1px solid #80643f;border-radius:6px;
-            }
-            QFrame#managementCharacterSheet QWidget {background:transparent;}
-            QFrame#managementCharacterSheet QLabel {border:none;}
-            QFrame#managementCharacterSheet QLabel#memberName {color:#f5dfb1;font-weight:700;}
-            QFrame#managementCharacterSheet QLabel#subtle {color:#e1c183;}
-            QFrame#managementCharacterSheet QComboBox,
-            QFrame#managementCharacterSheet QTextEdit {background:#11181f;border:1px solid #584832;}
-            QFrame#managementCharacterSheet QComboBox QAbstractItemView {background:#17212a;}
-            QFrame#managementCharacterSheet QPushButton {background:#202a33;border-color:#665338;color:#f0dfbf;}
-            QFrame#managementCharacterSheet QPushButton[primary="true"] {background:#344e42;border-color:#547762;}
-            QFrame#managementCharacterSheet QPushButton[danger="true"] {background:#4a2b2e;border-color:#74464a;}
-        """)
         panel.setMinimumWidth(360)
         panel.setMinimumHeight(260)
         panel.setMaximumWidth(470)
@@ -5043,18 +4646,29 @@ class GuildGearCheckerQt(QMainWindow):
         layout.setContentsMargins(14, 12, 14, 14)
         layout.setSpacing(10)
         top = QHBoxLayout()
+        top.setContentsMargins(12, 4, 12, 4)
+        top.setSpacing(8)
+
+        def add_toolbar_divider() -> None:
+            divider = QFrame()
+            divider.setObjectName("rosterToolbarDivider")
+            divider.setFixedSize(1, 22)
+            top.addWidget(divider, 0, Qt.AlignmentFlag.AlignVCenter)
+
         title = QLabel(tr("roster.title"))
-        title.setObjectName("sectionTitle")
+        title.setObjectName("rosterPageTitle")
         top.addWidget(title)
         self.roster_search_edit = QLineEdit()
         self.roster_search_edit.setPlaceholderText(tr("roster.search_placeholder"))
         self.roster_search_edit.setClearButtonEnabled(True)
+        self.roster_search_edit.setMinimumWidth(190)
         self.roster_search_edit.setMaximumWidth(260)
         self.roster_search_edit.textChanged.connect(self.refresh_roster)
-        top.addWidget(self.roster_search_edit)
+        top.addWidget(self.roster_search_edit, 1)
         self.v2_roster_class_filter = QComboBox()
         self.v2_roster_class_filter.addItem(tr("identity_v2_views.all_classes"), None)
         self.v2_roster_class_filter.currentIndexChanged.connect(self.refresh_roster)
+        self.v2_roster_class_filter.setMinimumWidth(120)
         self.v2_roster_class_filter.hide()
         top.addWidget(self.v2_roster_class_filter)
         self.v2_roster_sort = QComboBox()
@@ -5068,21 +4682,26 @@ class GuildGearCheckerQt(QMainWindow):
         ):
             self.v2_roster_sort.addItem(label, key)
         self.v2_roster_sort.currentIndexChanged.connect(self.refresh_roster)
+        self.v2_roster_sort.setMinimumWidth(110)
         self.v2_roster_sort.hide()
         top.addWidget(self.v2_roster_sort)
         top.addStretch(1)
+        add_toolbar_divider()
 
         self.roster_cards_button = QPushButton(tr("roster.cards_view"))
         self.roster_cards_button.setCheckable(True)
         self.roster_cards_button.setChecked(True)
         self.roster_cards_button.setObjectName("subnavButton")
+        self.roster_cards_button.setProperty("toolbarView", True)
         self.roster_cards_button.clicked.connect(lambda: self._set_roster_view("cards"))
         self.roster_list_button = QPushButton(tr("roster.list_view"))
         self.roster_list_button.setCheckable(True)
         self.roster_list_button.setObjectName("subnavButton")
+        self.roster_list_button.setProperty("toolbarView", True)
         self.roster_list_button.clicked.connect(lambda: self._set_roster_view("list"))
         top.addWidget(self.roster_cards_button)
         top.addWidget(self.roster_list_button)
+        add_toolbar_divider()
 
         zoom_frame = QFrame()
         zoom_frame.setObjectName("rosterZoomBar")
@@ -5121,14 +4740,18 @@ class GuildGearCheckerQt(QMainWindow):
         zoom_row.addWidget(roster_plus)
         zoom_row.addWidget(self.roster_zoom_value)
         top.addWidget(zoom_frame)
+        add_toolbar_divider()
 
         export_button = QPushButton(tr("roster.export_png"))
+        export_button.setObjectName("rosterExportButton")
         export_button.clicked.connect(self.export_roster_png)
         self.roster_export_button = export_button
         top.addWidget(export_button)
         toolbar_content = QWidget()
+        toolbar_content.setObjectName("rosterToolbarContent")
         toolbar_content.setLayout(top)
         toolbar_scroll = QScrollArea()
+        toolbar_scroll.setObjectName("rosterToolbarScroll")
         toolbar_scroll.setWidgetResizable(True)
         toolbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         toolbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -5150,14 +4773,6 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_content_stack.addWidget(self.roster_scroll)
         self.roster_list = CopyableReadOnlyTable(0, 11)
         self.roster_list.setObjectName("rosterListTable")
-        self.roster_list.setStyleSheet("""
-            QTableWidget#rosterListTable {
-                selection-background-color:#302b22;selection-color:#f5dfb1;
-            }
-            QTableWidget#rosterListTable::item:selected {
-                background:#302b22;color:#f5dfb1;
-            }
-        """)
         self.roster_list.setHorizontalHeaderLabels([
             tr("roster.column_name"), tr("roster.column_class"), tr("roster.column_role"),
             tr("roster.column_character_type"), tr("roster.column_gear"),
@@ -5373,7 +4988,7 @@ class GuildGearCheckerQt(QMainWindow):
         self.roster_detail_notes.setReadOnly(False)
         self.roster_detail_notes.textChanged.connect(self._roster_notes_changed)
         self.roster_detail_notes.setMinimumHeight(100)
-        self.roster_detail_notes.setStyleSheet("background:#10161d;border:1px solid #35414d;color:#eef2f5;")
+        self.roster_detail_notes.setObjectName("rosterDetailNotes")
         layout.addWidget(self.roster_detail_notes, 1)
 
         armory = QPushButton(tr("checker.open_armory"))
@@ -5401,13 +5016,6 @@ class GuildGearCheckerQt(QMainWindow):
         panel.setObjectName("rosterCharacterSheet")
         panel.setMinimumWidth(360)
         panel.setMaximumWidth(480)
-        panel.setStyleSheet("""
-            QFrame#rosterCharacterSheet {
-                background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #17212a,stop:1 #11181f);
-                border:1px solid #80643f;border-radius:6px;
-            }
-            QFrame#rosterCharacterSheet QLabel {background:transparent;border:none;}
-        """)
         previous_content = self.roster_detail_scroll.takeWidget()
         content = QWidget()
         content.setStyleSheet("background:transparent;")
@@ -5416,7 +5024,7 @@ class GuildGearCheckerQt(QMainWindow):
         body.setSpacing(10)
 
         header = QHBoxLayout()
-        self.roster_detail_name.setStyleSheet("font-size:20pt;font-weight:700;color:#f5dfb1;")
+
         name_policy = self.roster_detail_name.sizePolicy()
         name_policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
         self.roster_detail_name.setSizePolicy(name_policy)
@@ -5453,9 +5061,7 @@ class GuildGearCheckerQt(QMainWindow):
         rank_layout.addWidget(self.roster_rank_slot, 0, Qt.AlignmentFlag.AlignHCenter)
         self.roster_detail_rank.setWordWrap(True)
         self.roster_detail_rank.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.roster_detail_rank.setStyleSheet(
-            "font-size:12pt;color:#e1c183;font-weight:600;"
-        )
+        self.roster_detail_rank.setObjectName("rosterDetailRank")
         rank_layout.addWidget(self.roster_detail_rank)
         rank_layout.addStretch(1)
         portrait_row.addWidget(rank_column, 0, Qt.AlignmentFlag.AlignTop)
@@ -5484,9 +5090,7 @@ class GuildGearCheckerQt(QMainWindow):
         for value in (self.roster_current_dkp, self.roster_character_points, self.roster_player_points):
             value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             value.setStyleSheet("font-size:14pt;font-weight:700;color:#f0d7a4;")
-        self.roster_points_section.setStyleSheet(
-            "background:#151e25;border:1px solid #584832;border-radius:5px;"
-        )
+        self.roster_points_section.setObjectName("rosterPointsSection")
         body.addWidget(self.roster_points_section)
         body.addWidget(self.roster_dkp_section)
 
@@ -5505,12 +5109,7 @@ class GuildGearCheckerQt(QMainWindow):
         footer_layout = QHBoxLayout(footer)
         footer_layout.setContentsMargins(12, 8, 12, 10)
         footer_layout.setSpacing(8)
-        self.roster_profile_button.setStyleSheet(
-            "QPushButton {background:#594322;border:1px solid #bc9455;"
-            "color:#ffedca;padding:7px;}"
-            "QPushButton:disabled,QPushButton:disabled:hover {"
-            "background:#151b22;border:1px solid #252d35;color:#68727c;}"
-        )
+        self.roster_profile_button.setObjectName("rosterProfileButton")
         footer_layout.addWidget(armory)
         footer_layout.addWidget(self.roster_profile_button)
         panel.layout().addWidget(footer)
@@ -5705,39 +5304,6 @@ class GuildGearCheckerQt(QMainWindow):
 
         raids_page = QWidget()
         raids_page.setObjectName("raidPage")
-        raids_page.setStyleSheet("""
-            QWidget#raidPage QTableWidget::item:selected {
-                background:#3b3426;color:#f5dfb1;
-            }
-            QWidget#raidPage QHeaderView::section {
-                background:#202830;color:#e1c183;
-                border-right:1px solid #584832;border-bottom:1px solid #80643f;
-            }
-            QWidget#raidPage QTableWidget {
-                background:#11181f;alternate-background-color:#17212a;
-                selection-background-color:#3b3426;selection-color:#f5dfb1;
-                gridline-color:#29333c;
-            }
-            QWidget#raidPage QFrame#selectedRaidHeader {
-                background:#151e25;border:1px solid #584832;border-radius:5px;
-            }
-            QWidget#raidPage QLabel#raidHeaderDate {color:#aeb8c2;}
-            QWidget#raidPage QLabel#raidHeaderType {
-                color:#e1c183;font-weight:700;padding:3px 8px;
-                background:#302b22;border:1px solid #80643f;border-radius:4px;
-            }
-            QWidget#raidPage QLabel#raidHeaderName {
-                color:#f5dfb1;font-size:13pt;font-weight:700;
-            }
-            QWidget#raidPage QLabel#raidHeaderMeta {color:#aeb8c2;}
-            QWidget#raidPage QPushButton#raidLogsLink {
-                background:transparent;color:#e1c183;border:1px solid #584832;
-                padding:4px 9px;
-            }
-            QWidget#raidPage QPushButton#raidLogsLink:hover {
-                background:#302b22;border-color:#c7a265;
-            }
-        """)
         raids_layout = QVBoxLayout(raids_page)
 
         actions = QHBoxLayout()
@@ -5860,20 +5426,6 @@ class GuildGearCheckerQt(QMainWindow):
 
         attendance_page = QWidget()
         attendance_page.setObjectName("attendancePage")
-        attendance_page.setStyleSheet("""
-            QWidget#attendancePage QPushButton#matrixToggleButton {
-                background:#202a33;color:#f0dfbf;border:1px solid #584832;
-            }
-            QWidget#attendancePage QPushButton#matrixToggleButton:hover {
-                background:#302b22;border-color:#c7a265;
-            }
-            QWidget#attendancePage QPushButton#matrixToggleButton:checked {
-                background:#302b22;border-color:#80643f;color:#f5dfb1;
-            }
-            QWidget#attendancePage QSplitter#attendanceMatrixSplit::handle {
-                background:#80643f;width:2px;
-            }
-        """)
         attendance_layout = QVBoxLayout(attendance_page)
         self._build_raid_filters(attendance_layout, "matrix", include_limit=True)
 
@@ -6153,9 +5705,11 @@ class GuildGearCheckerQt(QMainWindow):
         self.raid_header_status.setText(
             tr("raids.status_recorded" if recorded else "raids.status_draft")
         )
-        self.raid_header_status.setStyleSheet(
-            f"color:{'#8ec79a' if recorded else '#e1c183'};"
-        )
+        self.raid_header_status.setProperty(
+            "raidRecordStatus", "recorded" if recorded else "draft")
+        self.raid_header_status.style().unpolish(self.raid_header_status)
+        self.raid_header_status.style().polish(self.raid_header_status)
+        self.raid_header_status.update()
         self.raid_header_logs.setVisible(bool(raid.warcraftLogsUrl))
         self.raid_header_logs.setToolTip(raid.warcraftLogsUrl)
 
@@ -6177,14 +5731,6 @@ class GuildGearCheckerQt(QMainWindow):
         view_switch = QFrame()
         view_switch.setObjectName("attendanceViewSwitch")
         view_switch.setProperty("innerCard", True)
-        view_switch.setStyleSheet("""
-            QFrame#attendanceViewSwitch QPushButton#viewSwitchButton:checked {
-                background:#302b22;border-color:#80643f;color:#f5dfb1;
-            }
-            QFrame#attendanceViewSwitch QPushButton#viewSwitchButton:hover {
-                border-color:#c7a265;
-            }
-        """)
         view_switch_layout = QHBoxLayout(view_switch)
         view_switch_layout.setContentsMargins(2, 2, 2, 2)
         view_switch_layout.setSpacing(0)
@@ -6322,28 +5868,6 @@ class GuildGearCheckerQt(QMainWindow):
     def _build_settings_page(self) -> QWidget:
         page = QWidget()
         page.setObjectName("settingsPage")
-        page.setStyleSheet("""
-            QWidget#settingsPage { background:#0d1219; }
-            QWidget#settingsPage QLabel { background:transparent; border:none; }
-            QWidget#settingsPage QFrame[card="true"] {
-                background:#131922; border:1px solid #5b4930; border-radius:3px;
-            }
-            QWidget#settingsPage QPushButton[primary="true"] {
-                background:#302b22; border:1px solid #80643f; color:#f5dfb1;
-            }
-            QWidget#settingsPage QPushButton[primary="true"]:hover {
-                background:#3a3325; border-color:#c7a265;
-            }
-            QWidget#settingsPage QPushButton[primary="true"]:pressed {
-                background:#211e1a; border-color:#c7a265;
-            }
-            QWidget#settingsPage QPushButton[primary="true"]:disabled {
-                background:#151b22; color:#68727c; border-color:#252d35;
-            }
-            QWidget#settingsPage QPushButton[primary="true"]:focus {
-                border-color:#e0bd72;
-            }
-        """)
         layout = QVBoxLayout(page)
         layout.setContentsMargins(14, 12, 14, 14)
         title = QLabel(tr("tabs.settings"))
@@ -8374,8 +7898,6 @@ class GuildGearCheckerQt(QMainWindow):
             members = groups.get(role, [])
             section = QFrame()
             section.setObjectName("rosterDraftSection" if draft else "rosterSection")
-            if draft:
-                section.setStyleSheet("background:transparent;border:none;")
             section_layout = QVBoxLayout(section)
             section_margin = max(7, round(12 * min(1.0, factor)))
             section_layout.setContentsMargins(
@@ -8578,7 +8100,7 @@ class GuildGearCheckerQt(QMainWindow):
         if member is None or member.lifeStatus != "active":
             return
         self.roster_detail_notes.setReadOnly(False)
-        self.roster_detail_portrait.set_contain_portrait(False)
+        self.roster_detail_portrait.set_contain_portrait(True)
         self.roster_armory_button.show()
         self.roster_selected_member_id = member.id
         if hasattr(self, "roster_current_dkp"):
@@ -8609,10 +8131,10 @@ class GuildGearCheckerQt(QMainWindow):
                               "positive" if raid_status == "Bereit" else
                               "negative" if raid_status == "Nicht bereit" else "neutral")
         else:
-            self.roster_detail_raid.setStyleSheet(
-                "background:#355f45;" if raid_status == "Bereit" else
-                ("background:#633b40;" if raid_status == "Nicht bereit" else "")
-            )
+            set_roster_status(self.roster_detail_raid,
+                              "positive" if raid_status == "Bereit" else
+                              "negative" if raid_status == "Nicht bereit" else "neutral",
+                              classic=True)
         self.roster_detail_portrait.set_source(member_portrait_path(self.model, member))
         self._set_member_reward_visuals(
             member,
@@ -8661,13 +8183,6 @@ class GuildGearCheckerQt(QMainWindow):
         class_color = CLASS_COLORS.get(item.className, "#d0d0d0")
         class_markup = (f'<span style="color:{class_color};font-weight:600;">'
                         f'{html.escape(class_text)}</span>')
-        if item.className:
-            icon_path = class_icon_path(item.className)
-            if icon_path.is_file():
-                source = html.escape(QUrl.fromLocalFile(str(icon_path)).toString(),
-                                     quote=True)
-                class_markup = (f'<img src="{source}" width="16" height="16"> '
-                                f'{class_markup}')
         parts = [html.escape(race_text), class_markup]
         if item.spec:
             parts.append(html.escape(item.spec))
@@ -8682,9 +8197,10 @@ class GuildGearCheckerQt(QMainWindow):
                               "positive" if item.raidStatus == "Bereit" else
                               "negative" if item.raidStatus == "Nicht bereit" else "neutral")
         else:
-            self.roster_detail_raid.setStyleSheet(
-                "background:#355f45;" if item.raidStatus == "Bereit" else
-                "background:#633b40;" if item.raidStatus == "Nicht bereit" else "")
+            set_roster_status(self.roster_detail_raid,
+                              "positive" if item.raidStatus == "Bereit" else
+                              "negative" if item.raidStatus == "Nicht bereit" else "neutral",
+                              classic=True)
         self.roster_detail_portrait.set_source(item.portraitPath)
         self.roster_detail_portrait.set_contain_portrait(True)
         self.roster_reward_portrait.clear_reward_badge()
@@ -11368,10 +10884,14 @@ class GuildGearCheckerQt(QMainWindow):
         changed = copy.deepcopy(store)
         changed.clmRosterName = str(name)
         changed.clmRosterId = str(roster_id) if roster_id else None
+        changed.currentDkpByMemberId = {}
+        changed.currentDkpRefreshedAt = None
         changed.validate()
-        self.identity_v2_store = changed
-        self.identity_v2_dirty = True
-        self.refresh_project_label()
+        self._clm_refresh_service = ClmDkpRefreshService()
+        self._v2_dkp_snapshot = None
+        self._v2_dkp_cache_project_path = None
+        self._apply_v2_character_store(changed)
+        self.clm_status_label.setText(tr("raid_clm_admin.clm_not_refreshed"))
 
     def _update_feature_controls(self, _checked: bool | None = None) -> None:
         v2_store = (self.identity_v2_store
@@ -11409,6 +10929,8 @@ class GuildGearCheckerQt(QMainWindow):
                 changed.clmDatabaseId = None
                 changed.clmRosterId = None
                 changed.clmRosterName = None
+                changed.currentDkpByMemberId = {}
+                changed.currentDkpRefreshedAt = None
                 changed.validate()
                 self.identity_v2_store = changed
                 self.identity_v2_dirty = True
@@ -11454,11 +10976,15 @@ class GuildGearCheckerQt(QMainWindow):
                 changed.clmRosterId = None
                 if had_clm_path:
                     changed.clmRosterName = None
+                changed.currentDkpByMemberId = {}
+                changed.currentDkpRefreshedAt = None
                 changed.validate()
-                self.identity_v2_store = changed
-                self.identity_v2_dirty = True
+                self._clm_refresh_service = ClmDkpRefreshService()
+                self._v2_dkp_snapshot = None
+                self._v2_dkp_cache_project_path = None
+                self._apply_v2_character_store(changed)
                 self._restore_v2_clm_roster_selection()
-                self.refresh_project_label()
+                self.clm_status_label.setText(tr("raid_clm_admin.clm_not_refreshed"))
             else:
                 self._restore_v2_clm_roster_selection()
         else:
@@ -11621,13 +11147,17 @@ class GuildGearCheckerQt(QMainWindow):
                                     QMessageBox.StandardButton.Yes |
                                     QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 return
-            if candidate.to_payload() != store.to_payload():
-                self._apply_v2_character_store(candidate)
-                self.v2_character_data_page.set_store(candidate)
             if snapshot is not None:
+                from app.identity_v2_dkp import with_current_dkp_snapshot
+
+                candidate = with_current_dkp_snapshot(
+                    candidate, snapshot.balances, snapshot.refreshed_at)
                 self._clm_refresh_service = pending_service
                 self._v2_dkp_snapshot = snapshot
                 self._v2_dkp_cache_project_path = self.identity_v2_project_path
+            if candidate.to_payload() != store.to_payload():
+                self._apply_v2_character_store(candidate)
+            elif snapshot is not None:
                 self._refresh_v2_dkp_projection()
             self.clm_roster_combo.clear()
             self._restore_v2_clm_roster_selection()
@@ -11704,20 +11234,20 @@ class GuildGearCheckerQt(QMainWindow):
         finally:
             self.clm_roster_combo.blockSignals(blocked)
         if is_v2:
-            if (self.identity_v2_store.clmRosterName != snapshot.roster_name
-                    or self.identity_v2_store.clmRosterId != snapshot.roster_id
-                    or self.identity_v2_store.clmDatabaseId != snapshot.database_id):
-                changed = copy.deepcopy(self.identity_v2_store)
-                changed.clmRosterName = snapshot.roster_name
-                changed.clmRosterId = snapshot.roster_id
-                changed.clmDatabaseId = snapshot.database_id
-                changed.validate()
-                self.identity_v2_store = changed
-                self.identity_v2_dirty = True
-                self.refresh_project_label()
+            from app.identity_v2_dkp import with_current_dkp_snapshot
+
+            changed = copy.deepcopy(self.identity_v2_store)
+            changed.clmRosterName = snapshot.roster_name
+            changed.clmRosterId = snapshot.roster_id
+            changed.clmDatabaseId = snapshot.database_id
+            changed = with_current_dkp_snapshot(
+                changed, snapshot.balances, snapshot.refreshed_at)
             self._v2_dkp_snapshot = snapshot
             self._v2_dkp_cache_project_path = self.identity_v2_project_path
-            self._refresh_v2_dkp_projection()
+            if changed.to_payload() != self.identity_v2_store.to_payload():
+                self._apply_v2_character_store(changed)
+            else:
+                self._refresh_v2_dkp_projection()
         else:
             matching = match_characters(snapshot.balances, self.model.members)
             self._clm_dkp_by_member_id = {
@@ -12295,6 +11825,11 @@ class GuildGearCheckerQt(QMainWindow):
         self.csv_v2_review_choices = {}
         self.identity_v2_dirty = bool(repaired_count or migrated_clm_path)
         self._set_project_mode("identity_v2")
+        if store.currentDkpRefreshedAt:
+            refreshed = datetime.fromisoformat(
+                store.currentDkpRefreshedAt).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+            self.clm_status_label.setText(tr(
+                "raid_clm_admin.clm_saved_dkp", refreshed=refreshed))
         if path is not None:
             self.set_status(
                 tr("identity_v2_graveyard.repair_applied", count=repaired_count)
@@ -12437,22 +11972,15 @@ class GuildGearCheckerQt(QMainWindow):
         if store is None:
             self._v2_dkp_projection = None
         else:
-            from app.identity_v2_dkp import (
-                IdentityV2DkpProjection, available_dkp_by_member,
-            )
+            from app.identity_v2_dkp import IdentityV2DkpProjection
 
-            snapshot = self._v2_dkp_snapshot
-            if self._v2_dkp_cache_project_path != self.identity_v2_project_path:
-                snapshot = None
-            self._v2_current_dkp_by_member_id = (
-                available_dkp_by_member(store, snapshot.balances)
-                if snapshot is not None else {}
-            )
+            self._v2_current_dkp_by_member_id = dict(store.currentDkpByMemberId)
             self._v2_dkp_projection = IdentityV2DkpProjection(
                 store,
                 available_by_member=self._v2_current_dkp_by_member_id,
                 raid_points_projection=self._v2_raid_point_projection,
-                refreshed_at=snapshot.refreshed_at if snapshot is not None else None,
+                refreshed_at=(datetime.fromisoformat(store.currentDkpRefreshedAt)
+                              if store.currentDkpRefreshedAt else None),
                 registry=self._reward_registry,
             )
         for page_name in ("v2_roster_page", "v2_players_page", "v2_character_data_page"):
@@ -12693,6 +12221,8 @@ class GuildGearCheckerQt(QMainWindow):
                 and previous.legacyClmGuidMemberMap == store.legacyClmGuidMemberMap
                 and previous.ignoredCsvCharacterNames == store.ignoredCsvCharacterNames
                 and previous.ignoredClmCharacterGroups == store.ignoredClmCharacterGroups
+                and previous.currentDkpByMemberId == store.currentDkpByMemberId
+                and previous.currentDkpRefreshedAt == store.currentDkpRefreshedAt
                 and previous.nextPlayerNumber == store.nextPlayerNumber
                 and previous.nextMainHistoryNumber == store.nextMainHistoryNumber
                 and previous.pointMode == store.pointMode
@@ -12940,9 +12470,17 @@ class GuildGearCheckerQt(QMainWindow):
             return
         safe_open_folder(folder)
 
+    def _set_banner_title(self, name: str) -> None:
+        # Keep the complete guild name accessible when the header is narrow.
+        title = str(name or tr("checker.title"))
+        self.banner_title.setText(self.banner_title.fontMetrics().elidedText(
+            title, Qt.TextElideMode.ElideRight, 270))
+        self.banner_title.setToolTip(title)
+
     def refresh_project_label(self) -> None:
         if self.project_mode == "identity_v2":
-            self.banner_title.setText(tr("identity_v2_project.title"))
+            self._set_banner_title(
+                self.identity_v2_store.guildName if self.identity_v2_store else "")
             path = self.identity_v2_project_path
             saved = path is not None
             self.grabber_button.setEnabled(saved)
@@ -12961,7 +12499,7 @@ class GuildGearCheckerQt(QMainWindow):
             self.project_label.setToolTip(str(path) if path else "")
             return
         if hasattr(self, "banner_title"):
-            self.banner_title.setText(self.model.guild_name or tr("checker.title"))
+            self._set_banner_title(self.model.guild_name)
         if self.model.project_path:
             suffix = tr("checker.dirty_suffix") if self.model.dirty else ""
             self.project_label.setText(tr("checker.project_label", name=self.model.project_path.name, dirty=suffix))

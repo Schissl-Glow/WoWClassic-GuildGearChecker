@@ -51,6 +51,29 @@ class CsvV2MaterializationTests(unittest.TestCase):
         path.write_text(meta + rows, encoding="utf-8")
         return path
 
+    def test_irrelevant_known_character_keeps_identity_and_source_without_attendance(self):
+        port = next(member for member in self.store.members
+                    if member.memberId == "m1003")
+        port.irrelevant = True
+        source = self.write("2026-09-01_BWL_Casts.csv", ["Annî", "Jêmma"])
+        plan = analyze_csv_raids_for_v2(self.store, [source])
+        self.assertFalse(any(item.name == "Jêmma"
+                             for item in plan.new_member_candidates))
+        result, summary = materialize_csv_raid_import(
+            self.store, plan, CsvImportDecisions())
+        self.assertEqual(summary.new_attendance, 1)
+        self.assertEqual([item.memberId for item in result.attendance
+                          if item.raidId != "r_clm"], ["m1000"])
+        self.assertTrue(next(item for item in result.members
+                             if item.memberId == "m1003").irrelevant)
+        self.assertIn(source.name, result.raids[-1].csvSourceFiles)
+        again, repeated = materialize_csv_raid_import(
+            result, analyze_csv_raids_for_v2(result, [source]),
+            CsvImportDecisions())
+        self.assertEqual(repeated.new_attendance, 0)
+        self.assertTrue(next(item for item in again.members
+                             if item.memberId == "m1003").irrelevant)
+
     def test_new_raid_source_title_url_unknown_attendance_and_earlier_start(self):
         source = self.write("2026-07-01_ZulGurub_Casts.csv", ["Annî"],
                             title="ZulGurub", url="https://vanilla.warcraftlogs.com/reports/a")

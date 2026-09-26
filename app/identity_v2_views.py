@@ -77,7 +77,7 @@ class IdentityV2ViewData:
                 member.memberId, member.name, member.className,
                 member.raidStartDate, len(raid_ids_by_member[member.memberId]),
                 dkp[member.memberId], member.clmGuid, legacy_counts[member.memberId],
-            ) for member in store.members
+            ) for member in store.members if not member.irrelevant
         ), key=lambda row: (row.name.casefold(), row.member_id)))
         raids = tuple(sorted((
             V2RaidRow(raid.raidId, raid.date, raid.name,

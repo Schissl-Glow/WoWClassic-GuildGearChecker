@@ -5,6 +5,7 @@ import unittest
 
 from app.identity_v2 import Attendance, IdentityV2Store, Member, Player, Raid
 from app.identity_v2_attendance_adapter import V2AttendanceAdapter
+from app.identity_v2_character_service import set_members_irrelevant
 from app.raid_attendance import Raid as LegacyRaid, RaidAttendance, calculate_statistics
 
 
@@ -123,6 +124,28 @@ class IdentityV2AttendanceAdapterTests(unittest.TestCase):
         self.assertEqual(self.cell("character", "raid", "m4", "r5").status, "bench")
         self.assertEqual(self.cell("character", "raid", "m4", "r4").status, "irrelevant")
         self.assertEqual(self.row("character", "raid", "m3").current_role, "main")
+
+    def test_irrelevant_character_is_absent_from_matrix_and_counts(self):
+        changed = copy.deepcopy(self.store)
+        changed.members.append(Member("m6", "Portchar", "Mage"))
+        changed.attendance.extend((
+            Attendance("a7", "r4", "m6", "unknown", "present"),
+            Attendance("a8", "r5", "m6", "unknown", "bench"),
+        ))
+        changed.validate()
+        before = V2AttendanceAdapter(changed)
+        self.assertIn("m6", {row.identifier for row in before.subjects(
+            before.scoped_raids(), "character", "raid")})
+        cleaned = set_members_irrelevant(changed, ("m6",), True)
+        adapter = V2AttendanceAdapter(cleaned)
+        raids = adapter.scoped_raids()
+        self.assertNotIn("m6", {row.identifier for row in adapter.subjects(
+            raids, "character", "raid")})
+        self.assertEqual({entry.memberId for entry in cleaned.attendance
+                          if entry.raidId == "r5"}, {"m3", "m4"})
+        self.assertEqual(next(row for row in adapter.subjects(
+            raids, "player", "raid") if row.identifier == "p1").stat.attendance_percent,
+            self.row("player", "raid", "p1").stat.attendance_percent)
 
     def test_inactivity_is_no_pause_but_inactive_player_is_hidden(self):
         changed = copy.deepcopy(self.store)

@@ -86,6 +86,40 @@ def _member(store: IdentityV2Store, member_id: str) -> Member:
     return member
 
 
+def set_members_irrelevant(
+    store: IdentityV2Store, member_ids: Iterable[str], irrelevant: bool,
+) -> IdentityV2Store:
+    """Classify unassigned identities and remove their derived Attendance."""
+    ids = tuple(member_ids)
+    if not ids or len(ids) != len(set(ids)) or type(irrelevant) is not bool:
+        raise CharacterDataError("Ungültige Irrelevant-Auswahl.")
+
+    def change(result: IdentityV2Store) -> None:
+        for member_id in ids:
+            member = _member(result, member_id)
+            if member.playerId is not None:
+                raise CharacterDataError(
+                    f"Member {member_id} ist einem Spieler zugeordnet.")
+            member.irrelevant = irrelevant
+        if not irrelevant:
+            return
+        removed = {entry.attendanceId: entry for entry in result.attendance
+                   if entry.memberId in ids}
+        result.attendance = [entry for entry in result.attendance
+                             if entry.attendanceId not in removed]
+        result.raidPoints.adjustments = {
+            key: value for key, value in result.raidPoints.adjustments.items()
+            if key not in removed}
+        result.raidPoints.excluded_attendance_ids.difference_update(removed)
+        removed_pairs = {(entry.raidId, entry.memberId)
+                         for entry in removed.values()}
+        result.raidCreditResolutions = [
+            item for item in result.raidCreditResolutions
+            if (item.raidId, item.creditedMemberId) not in removed_pairs]
+
+    return _apply(store, change)
+
+
 def _optional_choice(value: str | None, choices: tuple[str, ...], field_name: str) -> str | None:
     if value is None or value == "":
         return None

@@ -41,6 +41,16 @@ def view_fixture() -> IdentityV2Store:
 
 
 class IdentityV2ViewsTests(unittest.TestCase):
+    def test_irrelevant_character_is_not_a_regular_roster_entry(self):
+        store = IdentityV2Store(members=[
+            Member("m1", "Normal", "Mage"),
+            Member("m2", "Portchar", "Mage", irrelevant=True),
+        ])
+        self.assertEqual([row.member_id for row in IdentityV2ViewData.from_store(
+            store).roster], ["m1"])
+        self.assertEqual([item.memberId for item in build_v2_roster_items(
+            store, None, None, None, RewardRegistry())], ["m1"])
+
     def test_v2_roster_frame_follows_player_main_without_using_current_role(self):
         store = IdentityV2Store(
             players=[Player("p1", "Spieler", "m_new")],

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from .i18n import get_language, tr
 from .identity_v2 import IdentityV2Store, Member, Player
+from .identity_v2_character_service import set_members_irrelevant
 from .identity_v2_point_presentation import ActivePointPresentation, POINT_MODE_RAID
 from .qt_row_hover import install_row_hover
 from .identity_v2_main_history_qt import HISTORY_COLUMN_WIDTHS, MainHistoryDialog
@@ -73,6 +74,8 @@ def _is_graveyard(member: Member) -> bool:
 
 
 def _member_status(member: Member) -> str:
+    if member.irrelevant:
+        return tr("identity_v2_players.irrelevant")
     if _is_graveyard(member):
         return tr("identity_v2_players.graveyard")
     return tr("identity_v2_players.inactive") if member.lifeStatus == "inactive" else tr(
@@ -124,44 +127,6 @@ class IdentityV2PlayersPage(QWidget):
         self._checked_unassigned_ids: set[str] = set()
         self._unknown_current_member_id: str | None = None
         self.setObjectName("identityV2PlayersPage")
-        self.setStyleSheet("""
-            QWidget#identityV2PlayersPage {background:#11181f;}
-            QWidget#identityV2DetailHost,
-            QScrollArea#identityV2DetailScroll {background:#11181f; border:none;}
-            QWidget#identityV2PlayersPage QGroupBox {
-                color:#e1c183; border:1px solid #584832; margin-top:10px;
-                padding-top:8px; font-weight:600;
-            }
-            QWidget#identityV2PlayersPage QGroupBox::title {
-                subcontrol-origin:margin; left:10px; padding:0 5px;
-            }
-            QWidget#identityV2PlayersPage QListWidget {
-                background:#141c23; alternate-background-color:#19242d;
-                border:1px solid #584832;
-            }
-            QWidget#identityV2PlayersPage QListWidget::item:selected {
-                background:#302b22; color:#f5dfb1;
-            }
-            QWidget#identityV2PlayersPage QTableWidget {
-                background:#11181f; alternate-background-color:#17212a;
-                border:1px solid #584832; gridline-color:#29333c;
-                selection-background-color:#302b22; selection-color:#f5dfb1;
-            }
-            QWidget#identityV2PlayersPage QTableWidget::item:selected {
-                background:#302b22; color:#f5dfb1;
-            }
-            QWidget#identityV2PlayersPage QHeaderView::section {
-                background:#202830; color:#e1c183;
-                border-right:1px solid #584832; border-bottom:1px solid #80643f;
-                padding:4px;
-            }
-            QWidget#identityV2PlayersPage QFrame#characterRow {
-                background:#19242d; border:1px solid #394650; border-radius:4px;
-            }
-            QWidget#identityV2PlayersPage QFrame#characterRow:hover {
-                background:#222a2d; border-color:#80643f;
-            }
-        """)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 14)
         top = QHBoxLayout()
@@ -174,9 +139,9 @@ class IdentityV2PlayersPage(QWidget):
         self.search.textChanged.connect(self._refresh_master)
         top.addWidget(self.search, 2)
         self.status_filter = QComboBox()
-        for key in ("all", "active", "inactive", "graveyard"):
+        for key in ("open", "irrelevant", "all", "active", "inactive", "graveyard"):
             self.status_filter.addItem(tr(f"identity_v2_players.filter_{key}"), key)
-        self.status_filter.currentIndexChanged.connect(self._refresh_master)
+        self.status_filter.currentIndexChanged.connect(self._status_filter_changed)
         top.addWidget(self.status_filter)
         layout.addLayout(top)
 
@@ -376,6 +341,13 @@ class IdentityV2PlayersPage(QWidget):
         for member in self.store.members:
             if member.playerId != (player.playerId if player else None):
                 continue
+            if player is None:
+                if status == "irrelevant" and not member.irrelevant:
+                    continue
+                if status != "irrelevant" and status != "all" and member.irrelevant:
+                    continue
+            elif status == "irrelevant":
+                continue
             grave = _is_graveyard(member)
             if status == "active" and (grave or member.lifeStatus != "active"):
                 continue
@@ -388,6 +360,10 @@ class IdentityV2PlayersPage(QWidget):
                 continue
             members.append(member)
         return tuple(sorted(members, key=lambda item: (item.name.casefold(), item.memberId)))
+
+    def _status_filter_changed(self, *_args) -> None:
+        self._checked_unassigned_ids.clear()
+        self._refresh_master()
 
     def _refresh_master(self, *_args, preferred_player_id: object = _KEEP) -> None:
         if preferred_player_id is _KEEP:
@@ -421,7 +397,7 @@ class IdentityV2PlayersPage(QWidget):
                 if player is None:
                     continue
                 visible = self._matching_members(player, query)
-                if status != "all" and not visible:
+                if status not in {"all", "open"} and not visible:
                     continue
                 if query and query not in player.displayName.casefold() and not visible:
                     continue
@@ -529,6 +505,8 @@ class IdentityV2PlayersPage(QWidget):
         single_actions = QHBoxLayout()
         self.create_button = QPushButton(tr("identity_v2_players.create_player_short"))
         self.assign_button = QPushButton(tr("identity_v2_players.assign_existing"))
+        self.mark_irrelevant_button = QPushButton(tr("identity_v2_players.mark_irrelevant"))
+        self.unmark_irrelevant_button = QPushButton(tr("identity_v2_players.unmark_irrelevant"))
         self.bulk_create_button = QPushButton(tr("identity_v2_players.bulk_create_short"))
         self.selection_count_label = QLabel("")
         single_actions.addWidget(self.create_button)
@@ -542,7 +520,8 @@ class IdentityV2PlayersPage(QWidget):
         self.select_all_button = QPushButton(tr("identity_v2_players.select_all"))
         self.clear_selection_button = QPushButton(
             tr("identity_v2_players.clear_selection"))
-        for button in (self.bulk_active_button, self.bulk_inactive_button,
+        for button in (self.mark_irrelevant_button, self.unmark_irrelevant_button,
+                       self.bulk_active_button, self.bulk_inactive_button,
                        self.select_all_button, self.clear_selection_button):
             bulk_actions.addWidget(button)
         bulk_actions.addStretch(1)
@@ -594,6 +573,10 @@ class IdentityV2PlayersPage(QWidget):
         self.create_button.clicked.connect(self._create_player)
         self.assign_button.clicked.connect(self._assign_selected)
         self.bulk_create_button.clicked.connect(self._create_many_players)
+        self.mark_irrelevant_button.clicked.connect(
+            lambda: self._set_irrelevant(True))
+        self.unmark_irrelevant_button.clicked.connect(
+            lambda: self._set_irrelevant(False))
         self.select_all_button.clicked.connect(self._select_all_visible)
         self.clear_selection_button.clicked.connect(self._clear_visible_selection)
         self.empty_unknown_label = QLabel("")
@@ -704,7 +687,8 @@ class IdentityV2PlayersPage(QWidget):
                 return (member.className or tr(
                     "identity_v2_players.table_unknown_class")).casefold(), member.memberId
             if column == 3:
-                status_order = (2 if _is_graveyard(member) else
+                status_order = (3 if member.irrelevant else
+                                2 if _is_graveyard(member) else
                                 1 if member.lifeStatus == "inactive" else 0)
                 return status_order, member.memberId
             if column == 4:
@@ -779,11 +763,20 @@ class IdentityV2PlayersPage(QWidget):
         all_living = bool(action_ids) and all(
             item in by_id and not _is_graveyard(by_id[item]) for item in action_ids)
         all_active = all_living and all(
-            by_id[item].lifeStatus == "active" for item in action_ids)
+            by_id[item].lifeStatus == "active" and not by_id[item].irrelevant
+            for item in action_ids)
+        all_open = bool(action_ids) and all(
+            item in by_id and not by_id[item].irrelevant for item in action_ids)
+        all_irrelevant = bool(action_ids) and all(
+            item in by_id and by_id[item].irrelevant for item in action_ids)
         self.create_button.setVisible(multi_count < 2)
         self.bulk_create_button.setVisible(multi_count >= 2)
         self.create_button.setEnabled(all_active)
-        self.assign_button.setEnabled(bool(action_ids) and bool(self.store.players))
+        self.assign_button.setEnabled(all_open and bool(self.store.players))
+        self.mark_irrelevant_button.setVisible(not all_irrelevant)
+        self.mark_irrelevant_button.setEnabled(all_open)
+        self.unmark_irrelevant_button.setVisible(all_irrelevant)
+        self.unmark_irrelevant_button.setEnabled(all_irrelevant)
         self.bulk_active_button.setEnabled(False)
         self.bulk_inactive_button.setEnabled(False)
         self.bulk_active_button.hide()
@@ -806,6 +799,18 @@ class IdentityV2PlayersPage(QWidget):
         self.clear_selection_button.setEnabled(bool(self._checked_unassigned_ids))
         self.selection_count_label.setText(tr(
             "identity_v2_players.selected_count", count=len(self._checked_unassigned_ids)))
+
+    def _set_irrelevant(self, value: bool) -> None:
+        ids = self._unknown_action_ids()
+        if not ids:
+            return
+        if value and not self._confirm(tr(
+                "identity_v2_players.confirm_mark_irrelevant", count=len(ids))):
+            return
+        if self._run(lambda store: set_members_irrelevant(store, ids, value),
+                     select_player=None):
+            self._checked_unassigned_ids.clear()
+            self._refresh_master(preferred_player_id=None)
 
     def _render_player(self, player: Player, members: tuple[Member, ...]) -> None:
         header = QHBoxLayout()
@@ -857,7 +862,7 @@ class IdentityV2PlayersPage(QWidget):
                         if self.point_projection is not None else "–")
         points.setObjectName("v2PlayerRaidPoints")
         points.setMinimumWidth(45)
-        points.setStyleSheet("color:#f5dfb1;font-weight:600;")
+
         points.setToolTip(self.point_error or "")
         points_form.addRow(tr("raid_points.player_total"), points)
         points_form.setRowVisible(points, self.point_presentation.shows("raid_points"))
@@ -865,7 +870,7 @@ class IdentityV2PlayersPage(QWidget):
                          if self.point_projection is not None else "–")
         eternal.setObjectName("v2PlayerEternalPoints")
         eternal.setMinimumWidth(45)
-        eternal.setStyleSheet("color:#f5dfb1;font-weight:600;")
+
         eternal.setToolTip(self.point_error or "")
         points_form.addRow(tr("identity_v2_raid_points.eternal_player"), eternal)
         points_form.setRowVisible(

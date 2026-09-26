@@ -325,22 +325,6 @@ class IdentityV2CharacterDataPage(QWidget):
         if not isinstance(self._details_visible, bool):
             self._details_visible = True
         self.setObjectName("identityV2CharacterDataPage")
-        self.setStyleSheet("""
-            QWidget#identityV2CharacterDataPage {background:#11181f;}
-            QWidget#identityV2CharacterDataPage QTableWidget {
-                background:#11181f;alternate-background-color:#17212a;
-                border:1px solid #584832;gridline-color:#29333c;
-                selection-background-color:#302b22;selection-color:#f5dfb1;
-            }
-            QWidget#identityV2CharacterDataPage QHeaderView::section {
-                background:#202830;color:#e1c183;
-                border-right:1px solid #584832;border-bottom:1px solid #80643f;
-                padding:4px;
-            }
-            QWidget#identityV2CharacterDataPage QFrame#characterDetail {
-                background:#17212a;border:1px solid #80643f;border-radius:6px;
-            }
-        """)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 14)
         layout.setSpacing(9)
@@ -420,12 +404,12 @@ class IdentityV2CharacterDataPage(QWidget):
         self.portrait = QLabel()
         self.portrait.setFixedSize(220, 220)
         self.portrait.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.portrait.setStyleSheet("border:1px solid #584832;background:#11181f;")
+        self.portrait.setObjectName("characterDetailPortrait")
         hero.addWidget(self.portrait)
         heading = QVBoxLayout()
         self.detail_name = QLabel("–")
         self.detail_name.setWordWrap(True)
-        self.detail_name.setStyleSheet("color:#f5dfb1;font-weight:700;")
+        self.detail_name.setObjectName("characterDetailName")
         self.detail_status = QLabel("–")
         self.detail_player = QLabel("–")
         self.detail_role = QLabel("–")
@@ -501,14 +485,7 @@ class IdentityV2CharacterDataPage(QWidget):
         content_layout.addWidget(self.point_history_button)
         self.mark_dead_button = QPushButton(
             f"☠ {tr('identity_v2_character_data.mark_dead')}")
-        self.mark_dead_button.setStyleSheet("""
-            QPushButton {background:#8b2d35;color:#ffffff;border:1px solid #c9757b;
-                         border-radius:4px;padding:6px;font-weight:600;}
-            QPushButton:hover {background:#a83a43;}
-            QPushButton:pressed {background:#74252c;}
-            QPushButton:focus {border-color:#f0a2a7;}
-            QPushButton:disabled {background:#292025;color:#86777a;border-color:#544044;}
-        """)
+        self.mark_dead_button.setObjectName("markDeadButton")
         self.mark_dead_button.clicked.connect(
             lambda: self._request_death_for_member(self.selected_member_id))
         content_layout.addWidget(self.mark_dead_button)

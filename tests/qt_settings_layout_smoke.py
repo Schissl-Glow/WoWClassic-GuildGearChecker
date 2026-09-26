@@ -70,7 +70,10 @@ def run() -> None:
                     grid.width(), guild_card.width(), window.clm_group.width(),
                 )
                 assert window.clm_group.width() > grid.width() * 0.8
-        assert "#5b4930" in window._pages["settings"].styleSheet()
+        assert window._pages["settings"].objectName() == "settingsPage"
+        card_rule = window.styleSheet().split(
+            'QWidget#settingsPage QFrame[card="true"]', 1)[1].split("}", 1)[0]
+        assert "#5b4930" in card_rule
         print("Qt Settings Layout Smoke: OK")
     finally:
         window.close()

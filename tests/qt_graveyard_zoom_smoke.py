@@ -45,7 +45,9 @@ def run() -> None:
         window.switch_page("graveyard")
         app.processEvents()
         assert window.grave_view.slider.minimum() == 40
-        assert "#80643f" in window.grave_view.zoom_bar.styleSheet()
+        assert window.grave_view.zoom_bar.objectName() == "graveZoomBar"
+        zoom_rule = window.styleSheet().rsplit("QFrame#graveZoomBar {", 1)[1].split("}", 1)[0]
+        assert "#80643f" in zoom_rule
 
         inventory_calls = 0
         original_inventory = window.model.gravestone_inventory
