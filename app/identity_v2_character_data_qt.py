@@ -12,7 +12,8 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QComboBox, QDateEdit, QDialog,
     QDialogButtonBox, QFormLayout, QFrame, QHBoxLayout, QHeaderView, QLabel,
     QLineEdit, QMessageBox, QPushButton, QRadioButton, QScrollArea, QSplitter,
-    QSpinBox, QStyle, QStyledItemDelegate, QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout,
+    QSizePolicy, QSpinBox, QStyle, QStyledItemDelegate, QTableWidget, QTableWidgetItem,
+    QTextEdit, QVBoxLayout,
     QWidget,
 )
 
@@ -24,7 +25,7 @@ from .identity_v2_character_rows import CharacterTableRow, character_table_rows
 from .identity_v2_graveyard import GravestoneUnavailableError
 from .identity_v2_character_service import (
     BurialTypeError, DeathAttendanceConflict, DeathCorrectionError, MemberEdit,
-    apply_member_edits,
+    apply_member_edits, create_manual_character, set_members_irrelevant,
     clear_member_death_marking, confirm_member_check, correct_member_death_date,
     mark_member_dead, set_member_class, set_member_gear_status, set_member_note, set_member_race,
     set_member_raid_role, set_member_raid_status, set_member_spec, set_member_burial_type,
@@ -40,15 +41,20 @@ from .identity_v2_raid_points import apply_v2_member_special_edits
 
 
 DETAIL_VISIBLE_SETTING = "identity_v2_character_detail_visible"
+SUMMARY_KEYS = frozenset({
+    "last_checked", "last_raid", "raid_count", "death_date",
+    "available_dkp", "eternal_dkp",
+})
+DKP_SUMMARY_KEYS = frozenset({"available_dkp", "eternal_dkp"})
 SPLITTER_SIZES_SETTING = "identity_v2_character_splitter_sizes"
 COLUMN_WIDTHS_SETTING = "identity_v2_character_column_widths"
 COLUMN_ORDER_SETTING = "identity_v2_character_column_order"
 
 COLUMNS = (
     "name", "player", "role", "race", "class", "spec", "raid_role", "gear",
-    "raid_status", "last_checked", "last_raid", "dead",
+    "raid_status", "last_checked", "last_raid", "raid_count", "dead",
 )
-DEFAULT_WIDTHS = (180, 160, 105, 110, 115, 140, 115, 100, 120, 125, 120, 70)
+DEFAULT_WIDTHS = (180, 160, 105, 110, 115, 140, 115, 100, 120, 125, 120, 75, 70)
 EDITABLE_COLUMNS = frozenset({3, 4, 5, 6, 7, 8})
 FIELD_BY_COLUMN = {
     3: "race", 4: "className", 5: "spec", 6: "raidRole",
@@ -61,7 +67,10 @@ DEATH_ACTION_ROLE = RAW_ROLE + 1
 def _widths(value: object) -> list[int]:
     result = list(DEFAULT_WIDTHS)
     if isinstance(value, (list, tuple)):
-        for index, width in enumerate(value[:len(result)]):
+        saved = list(value)
+        if len(saved) == len(result) - 1:
+            saved.insert(-1, result[-2])
+        for index, width in enumerate(saved[:len(result)]):
             if isinstance(width, int) and not isinstance(width, bool) and 60 <= width <= 2400:
                 result[index] = width
     result[-1] = min(result[-1], 90)
@@ -71,8 +80,12 @@ def _widths(value: object) -> list[int]:
 def _order(value: object) -> list[str]:
     data_columns = COLUMNS[:-1]
     result = [key for key in value if key in data_columns] if isinstance(value, list) else []
+    has_saved_raid_count = "raid_count" in result
     result = list(dict.fromkeys(result))
     result.extend(key for key in data_columns if key not in result)
+    if not has_saved_raid_count:
+        result.remove("raid_count")
+        result.insert(result.index("last_raid") + 1, "raid_count")
     return [*result, "dead"]
 
 
@@ -237,6 +250,70 @@ class DetailChoiceComboBox(QComboBox):
         super().keyPressEvent(event)
 
 
+class AddCharacterDialog(QDialog):
+    """Collect one manual character identity without creating raid data."""
+
+    def __init__(self, store: IdentityV2Store, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(tr("identity_v2_character_data.add_character"))
+        self.setMinimumWidth(380)
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        self.name_edit = QLineEdit()
+        self.name_edit.setMaxLength(120)
+        form.addRow(tr("identity_v2_character_data.column_name"), self.name_edit)
+        self.player_choice = QComboBox()
+        self.player_choice.addItem(tr("identity_v2_character_data.unknown_player"), None)
+        for player in sorted(store.players, key=lambda item: (
+                item.displayName.casefold(), item.playerId)):
+            self.player_choice.addItem(
+                f"{player.displayName} ({player.playerId})", player.playerId)
+        form.addRow(tr("identity_v2_character_data.column_player"),
+                    self.player_choice)
+        self.role_choice = QComboBox()
+        self.role_choice.addItem(tr("common.not_set"), None)
+        self.role_choice.addItem(tr("identity_v2_character_data.main"), "main")
+        self.role_choice.addItem(tr("identity_v2_character_data.twink"), "twink")
+        form.addRow(tr("identity_v2_character_data.column_role"), self.role_choice)
+        self.class_choice = QComboBox()
+        self.class_choice.addItem(tr("identity_v2_character_data.unknown_class"), None)
+        for class_name in CLASS_SPECS:
+            self.class_choice.addItem(class_name, class_name)
+        form.addRow(tr("identity_v2_character_data.column_class"),
+                    self.class_choice)
+        layout.addLayout(form)
+        self._players = {player.playerId: player for player in store.players}
+        self.player_choice.currentIndexChanged.connect(self._player_changed)
+        self._player_changed()
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok |
+            QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self._accept_if_valid)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _player_changed(self, *_args) -> None:
+        player = self._players.get(self.player_choice.currentData())
+        self.role_choice.setEnabled(player is not None)
+        role = ("twink" if player.mainMemberId else "main") if player else None
+        self.role_choice.setCurrentIndex(self.role_choice.findData(role))
+
+    def _accept_if_valid(self) -> None:
+        if not self.name_edit.text().strip():
+            QMessageBox.warning(
+                self, tr("identity_v2_character_data.edit_error_title"),
+                tr("identity_v2_character_data.add_name_required"))
+            self.name_edit.setFocus()
+            return
+        self.accept()
+
+    def values(self) -> tuple[str, str | None, str | None, str | None]:
+        return (
+            self.name_edit.text().strip(), self.class_choice.currentData(),
+            self.player_choice.currentData(), self.role_choice.currentData(),
+        )
+
+
 class MemberSpecialPointsDialog(QDialog):
     """Edit member-owned special points as one cancelable draft."""
 
@@ -341,7 +418,7 @@ class IdentityV2CharacterDataPage(QWidget):
         self.search.textChanged.connect(self._refresh_table)
         toolbar.addWidget(self.search)
         self.status_filter = QComboBox()
-        for status in ("all", "active", "inactive", "graveyard"):
+        for status in ("all", "active", "inactive", "irrelevant", "graveyard"):
             self.status_filter.addItem(tr(f"identity_v2_character_data.filter_{status}"), status)
         self.status_filter.currentIndexChanged.connect(self._refresh_table)
         toolbar.addWidget(self.status_filter)
@@ -351,6 +428,11 @@ class IdentityV2CharacterDataPage(QWidget):
             self.gear_filter.addItem(_gear_text(value), value)
         self.gear_filter.currentIndexChanged.connect(self._refresh_table)
         toolbar.addWidget(self.gear_filter)
+        self.add_character_button = QPushButton(
+            tr("identity_v2_character_data.add_character"))
+        self.add_character_button.setEnabled(False)
+        self.add_character_button.clicked.connect(self._add_character)
+        toolbar.addWidget(self.add_character_button)
         self.details_button = QPushButton(tr("identity_v2_character_data.show_details"))
         self.details_button.setCheckable(True)
         toolbar.addWidget(self.details_button)
@@ -390,20 +472,25 @@ class IdentityV2CharacterDataPage(QWidget):
 
         self.detail_panel = QFrame()
         self.detail_panel.setObjectName("characterDetail")
-        self.detail_panel.setMinimumWidth(310)
-        self.detail_panel.setMaximumWidth(470)
+        self.detail_panel.setMinimumWidth(470)
+        self.detail_panel.setMaximumWidth(560)
         detail_layout = QVBoxLayout(self.detail_panel)
         detail_layout.setContentsMargins(8, 8, 8, 10)
         self.detail_scroll = QScrollArea()
         self.detail_scroll.setWidgetResizable(True)
         self.detail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.detail_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.detail_scroll.setMinimumHeight(0)
+        self.detail_scroll.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         detail_content = QWidget()
         content_layout = QVBoxLayout(detail_content)
         hero = QHBoxLayout()
+        hero.setSpacing(8)
         self.portrait = QLabel()
         self.portrait.setFixedSize(220, 220)
         self.portrait.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.portrait.setScaledContents(False)
         self.portrait.setObjectName("characterDetailPortrait")
         hero.addWidget(self.portrait)
         heading = QVBoxLayout()
@@ -418,6 +505,10 @@ class IdentityV2CharacterDataPage(QWidget):
             widget.setTextFormat(Qt.TextFormat.PlainText)
             widget.setWordWrap(True)
             heading.addWidget(widget)
+        self.summary_form = QFormLayout()
+        self.summary_form.setVerticalSpacing(1)
+        self.summary_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        heading.addLayout(self.summary_form)
         heading.addStretch(1)
         hero.addLayout(heading, 1)
         content_layout.addLayout(hero)
@@ -444,10 +535,17 @@ class IdentityV2CharacterDataPage(QWidget):
                 value.setTextFormat(Qt.TextFormat.PlainText)
                 value.setWordWrap(True)
             self.detail_values[key] = value
-            self.overview_form.addRow(tr(f"identity_v2_character_data.detail_{key}"), value)
-            self.overview_form.setRowVisible(
-                value, self.point_presentation.shows(key))
+            form = self.summary_form if key in SUMMARY_KEYS else self.overview_form
+            form.addRow(tr(f"identity_v2_character_data.detail_{key}"), value)
+            form.setRowVisible(
+                value, key != "dkp_rank" and (
+                    key in DKP_SUMMARY_KEYS or self.point_presentation.shows(key)))
         content_layout.addLayout(self.overview_form)
+        self.restore_relevant_button = QPushButton(
+            tr("identity_v2_character_data.restore_relevant"))
+        self.restore_relevant_button.clicked.connect(self._restore_relevant)
+        self.restore_relevant_button.hide()
+        content_layout.addWidget(self.restore_relevant_button)
         self.burial_row = QWidget()
         burial_layout = QHBoxLayout(self.burial_row)
         burial_layout.setContentsMargins(0, 0, 0, 0)
@@ -502,7 +600,12 @@ class IdentityV2CharacterDataPage(QWidget):
         content_layout.addStretch(1)
         self.detail_scroll.setWidget(detail_content)
         detail_layout.addWidget(self.detail_scroll, 1)
-        navigation = QHBoxLayout()
+        navigation_bar = QWidget()
+        navigation_bar.setObjectName("characterDetailNavigation")
+        navigation_bar.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        navigation = QHBoxLayout(navigation_bar)
+        navigation.setContentsMargins(0, 6, 0, 0)
         self.previous_button = QPushButton(tr("identity_v2_character_data.previous"))
         self.next_button = QPushButton(tr("identity_v2_character_data.next"))
         self.position_label = QLabel("")
@@ -511,7 +614,7 @@ class IdentityV2CharacterDataPage(QWidget):
         navigation.addWidget(self.previous_button)
         navigation.addWidget(self.position_label)
         navigation.addWidget(self.next_button)
-        detail_layout.addLayout(navigation)
+        detail_layout.addWidget(navigation_bar, 0)
         self.splitter.addWidget(self.detail_panel)
         self.splitter.setChildrenCollapsible(False)
         self.splitter.setStretchFactor(0, 1)
@@ -582,6 +685,7 @@ class IdentityV2CharacterDataPage(QWidget):
 
     def set_store(self, store: IdentityV2Store | None, *, reset_filters: bool = False) -> None:
         self.store = store
+        self.add_character_button.setEnabled(store is not None)
         if reset_filters:
             self._order_ids = None
             self._sort_state = None
@@ -618,8 +722,10 @@ class IdentityV2CharacterDataPage(QWidget):
     def set_active_point_system(self, mode: str) -> None:
         self.point_presentation = ActivePointPresentation(mode)
         for key, value in self.detail_values.items():
-            self.overview_form.setRowVisible(
-                value, self.point_presentation.shows(key))
+            form = self.summary_form if key in SUMMARY_KEYS else self.overview_form
+            form.setRowVisible(
+                value, key != "dkp_rank" and (
+                    key in DKP_SUMMARY_KEYS or self.point_presentation.shows(key)))
         self.special_points_button.setVisible(
             self.point_presentation.shows("raid_point_adjustment"))
         self.point_history_button.setVisible(
@@ -628,6 +734,56 @@ class IdentityV2CharacterDataPage(QWidget):
 
     def set_gravestone_templates_provider(self, provider) -> None:
         self.gravestone_templates_provider = provider
+
+    def _add_character(self) -> bool:
+        source = self.store
+        if source is None:
+            return False
+        payload, project_path = source.to_payload(), self.project_path
+        dialog = AddCharacterDialog(source, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return False
+        if not self._correction_context_is_current(source, payload, project_path):
+            return False
+        name, class_name, player_id, character_type = dialog.values()
+        player = next((item for item in source.players
+                       if item.playerId == player_id), None)
+        if (player is not None and character_type == "main"
+                and player.mainMemberId is not None
+                and QMessageBox.question(
+                    self, tr("identity_v2_character_data.add_character"),
+                    tr("identity_v2_character_data.confirm_main_change",
+                       player=player.displayName),
+                    QMessageBox.StandardButton.Yes |
+                    QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes):
+            return False
+        try:
+            result, member_id = create_manual_character(
+                source, name, class_name, player_id, character_type)
+        except Exception as error:
+            QMessageBox.warning(
+                self, tr("identity_v2_character_data.edit_error_title"),
+                tr("identity_v2_character_data.edit_failed", error=error))
+            return False
+        for combo in (self.status_filter, self.gear_filter):
+            blocked = combo.blockSignals(True)
+            combo.setCurrentIndex(0)
+            combo.blockSignals(blocked)
+        blocked = self.search.blockSignals(True)
+        self.search.clear()
+        self.search.blockSignals(blocked)
+        self.selected_member_id = member_id
+        self.set_store(result)
+        self.storeChanged.emit(result)
+        return True
+
+    def _restore_relevant(self) -> None:
+        member_id = self.selected_member_id
+        if member_id is not None:
+            self._execute(
+                (member_id,),
+                lambda store: set_members_irrelevant(store, (member_id,), False))
+
 
     def _edit_special_points(self) -> bool:
         member_id = self.selected_member_id
@@ -664,6 +820,7 @@ class IdentityV2CharacterDataPage(QWidget):
                 row.name, row.playerName, row.playerRole, row.race, row.className,
                 row.spec, role_order[row.raidRole], gear_order[row.gearStatus],
                 raid_status_order[row.raidStatus], row.lastChecked, row.lastRaidDate,
+                row.raidCount,
             )[column]
             if isinstance(value, str):
                 value = value.casefold()
@@ -674,9 +831,11 @@ class IdentityV2CharacterDataPage(QWidget):
 
     def _matches(self, row: CharacterTableRow, query: str, status: str,
                  gear: str | None) -> bool:
-        if status == "active" and row.lifeStatus != "active":
+        if status == "active" and (row.lifeStatus != "active" or row.irrelevant):
             return False
-        if status == "inactive" and row.lifeStatus != "inactive":
+        if status == "inactive" and (row.lifeStatus != "inactive" or row.irrelevant):
+            return False
+        if status == "irrelevant" and not row.irrelevant:
             return False
         if status == "graveyard" and row.lifeStatus != "dead":
             return False
@@ -720,6 +879,7 @@ class IdentityV2CharacterDataPage(QWidget):
             row.spec or "–", _raid_role_text(row.raidRole),
             _gear_text(row.gearStatus), _raid_status_text(row.raidStatus),
             _date_text(row.lastChecked), _date_text(row.lastRaidDate),
+            str(row.raidCount),
             tr("identity_v2_character_data.dead") if row.isDead else "☠",
         )
         for column, value in enumerate(values):
@@ -729,6 +889,8 @@ class IdentityV2CharacterDataPage(QWidget):
                 item.setData(RAW_ROLE, self._raw_value(row, column))
             else:
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            if column == len(COLUMNS) - 2:
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             if column == len(COLUMNS) - 1:
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 item.setData(DEATH_ACTION_ROLE, not row.isDead)
@@ -800,7 +962,8 @@ class IdentityV2CharacterDataPage(QWidget):
                 gearStatus=member.gearStatus, raidStatus=member.raidStatus,
                 note=member.note, lastChecked=member.lastChecked,
                 playerRole=player_role, lifeStatus=member.lifeStatus,
-                isDead=member.lifeStatus == "dead", deathDate=member.deathDate,
+                irrelevant=member.irrelevant, isDead=member.lifeStatus == "dead",
+                deathDate=member.deathDate,
             )
             if row != old:
                 updated[member_id] = row
@@ -1311,6 +1474,7 @@ class IdentityV2CharacterDataPage(QWidget):
             self.special_points_button.setEnabled(False)
             self.point_history_button.setEnabled(False)
             self.mark_dead_button.hide()
+            self.restore_relevant_button.hide()
             self.correct_death_date_button.hide()
             self.clear_death_button.hide()
             self.burial_row.hide()
@@ -1329,10 +1493,15 @@ class IdentityV2CharacterDataPage(QWidget):
             return
         position = self.visible_member_ids.index(row.memberId)
         self.detail_name.setText(row.name)
-        self.detail_status.setText(tr(f"life.{row.lifeStatus}"))
+        status_text = (tr("identity_v2_character_data.filter_irrelevant")
+                       if row.irrelevant else tr(f"life.{row.lifeStatus}"))
+        self.detail_status.setText(
+            f"{tr('identity_v2_character_data.detail_status')}: {status_text}")
         self.detail_player.setText(
-            row.playerName or tr("identity_v2_character_data.unknown_player"))
-        self.detail_role.setText(_role_text(row.playerRole))
+            f"{tr('identity_v2_character_data.column_player')}: "
+            f"{row.playerName or tr('identity_v2_character_data.unknown_player')}")
+        self.detail_role.setText(
+            f"{tr('identity_v2_character_data.column_role')}: {_role_text(row.playerRole)}")
         values = {
             "race": row.race or "–",
             "class": row.className or tr("identity_v2_character_data.unknown_class"),
@@ -1383,7 +1552,8 @@ class IdentityV2CharacterDataPage(QWidget):
         self.confirm_check_button.setEnabled(row.lifeStatus == "active")
         self.special_points_button.setEnabled(self.point_projection is not None)
         self.point_history_button.setEnabled(self.point_projection is not None)
-        self.mark_dead_button.setVisible(not row.isDead)
+        self.mark_dead_button.setVisible(not row.isDead and not row.irrelevant)
+        self.restore_relevant_button.setVisible(row.irrelevant)
         self.correct_death_date_button.setVisible(row.isDead)
         self.clear_death_button.setVisible(row.isDead)
         self.burial_row.setVisible(row.isDead)
@@ -1398,9 +1568,13 @@ class IdentityV2CharacterDataPage(QWidget):
             self.portrait.setText(tr("identity_v2_character_data.no_portrait"))
         else:
             self.portrait.setText("")
-            self.portrait.setPixmap(picture.scaled(
-                self.portrait.size(), Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation))
+            fitted = picture.scaled(
+                self.portrait.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation)
+            left = (fitted.width() - self.portrait.width()) // 2
+            top = (fitted.height() - self.portrait.height()) // 2
+            self.portrait.setPixmap(fitted.copy(
+                left, top, self.portrait.width(), self.portrait.height()))
         self.position_label.setText(f"{position + 1} / {len(self.visible_member_ids)}")
         self.previous_button.setEnabled(position > 0)
         self.next_button.setEnabled(position + 1 < len(self.visible_member_ids))

@@ -569,9 +569,11 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
             for key in ("v2PlayerRaidPoints", "v2PlayerEternalPoints",
                         "v2PlayerRaidRank"):
                 self.assertEqual(form.isRowVisible(player_rows[key]), not dkp)
-            for key in ("available_dkp", "eternal_dkp", "dkp_rank"):
-                self.assertEqual(character_page.overview_form.isRowVisible(
-                    character_page.detail_values[key]), dkp)
+            for key in ("available_dkp", "eternal_dkp"):
+                self.assertTrue(character_page.summary_form.isRowVisible(
+                    character_page.detail_values[key]))
+            self.assertFalse(character_page.overview_form.isRowVisible(
+                character_page.detail_values["dkp_rank"]))
             for key in ("raid_points", "eternal_raid_points", "raid_rank"):
                 self.assertEqual(character_page.overview_form.isRowVisible(
                     character_page.detail_values[key]), not dkp)
@@ -1436,6 +1438,48 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
         self.assertEqual(load_identity_v2(copy).to_payload(), self.store.to_payload())
         self.assertFalse(self.window.identity_v2_dirty)
 
+    def test_manual_character_in_checker_marks_dirty_and_survives_save(self):
+        self.assertFalse(self.open_path(self.target).called)
+        before = self.window.identity_v2_store.to_payload()
+        self.window.switch_page("identity_v2_character_data")
+        page = self.window.v2_character_data_page
+        with patch("app.identity_v2_character_data_qt.AddCharacterDialog") as factory:
+            dialog = factory.return_value
+            dialog.exec.return_value = QDialog.DialogCode.Accepted
+            dialog.values.return_value = ("CodexProbe", "Mage", None, None)
+            self.assertTrue(page._add_character())
+        member_id = page.selected_member_id
+        self.assertEqual(page.detail_name.text(), "CodexProbe")
+        self.assertTrue(self.window.identity_v2_dirty)
+        self.assertIn(member_id, {item.memberId for item in self.window._v2_roster_items})
+        current = self.window.identity_v2_store
+        self.assertEqual(current.attendance, self.store.attendance)
+        self.assertEqual(current.eternalDkpRecords, self.store.eternalDkpRecords)
+        self.assertEqual(current.currentDkpByMemberId, before.get("currentDkpByMemberId", {}))
+        self.window.save_project()
+        self.assertFalse(self.window.identity_v2_dirty)
+        saved = load_identity_v2(self.target)
+        self.assertEqual(next(item.name for item in saved.members
+                              if item.memberId == member_id), "CodexProbe")
+
+    def test_roster_cards_exclude_inactive_and_irrelevant_before_grouping(self):
+        store = IdentityV2Store(members=[
+            Member("m1000", "Aktiv", "Mage", raidRole="dps"),
+            Member("m1001", "Inaktiv", "Mage",
+                   lifeStatus="inactive", raidRole="dps"),
+            Member("m1002", "Irrelevant", "Mage",
+                   irrelevant=True, raidRole="dps"),
+        ])
+        target = self.root / "active-gallery.ggc"
+        save_new_identity_v2(store, target)
+        self.assertFalse(self.open_path(target).called)
+        self.window.switch_page("rooster")
+        self.assertEqual({card.member_id for card in self.window._roster_cards},
+                         {"m1000"})
+        self.assertEqual([item.memberId for item in
+                          self.window._roster_groups()["dps"]], ["m1000"])
+        self.assertEqual(len(self.window.identity_v2_store.members), 3)
+
     def test_character_inline_edit_marks_dirty_without_autosaving_project(self):
         self.assertFalse(self.open_path(self.target).called)
         self.window.switch_page("identity_v2_character_data")
@@ -1917,8 +1961,8 @@ class IdentityV2ProjectQtTests(unittest.TestCase):
         self.window.switch_page("management")
         self.assertIs(self.window.stack.currentWidget(), self.window.v2_players_page)
         self.window.switch_page("identity_v2")
-        self.assertIs(self.window.stack.currentWidget(),
-                      self.window._pages["identity_v2"])
+        self.assertIs(self.window.stack.currentWidget(), self.window.v2_players_page)
+        self.assertNotIn("identity_v2", self.window._pages)
         self.assertEqual(self.window.identity_v2_store.to_payload(), self.store.to_payload())
 
     def test_v2_raid_uses_old_tabs_table_wcl_and_active_point_mode(self):

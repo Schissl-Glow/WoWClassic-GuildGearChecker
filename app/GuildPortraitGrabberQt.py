@@ -18,6 +18,10 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Sequence
 
+if __package__ in (None, ""):
+    # The .bat starter and the Checker launch this file directly.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from PySide6.QtCore import QPointF, QRect, QRectF, QSize, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPen, QPixmap, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
@@ -235,7 +239,7 @@ except ImportError:  # Direkter Start über app\GuildPortraitGrabberQt.py
 
 
 APP_NAME = "Guild Portrait Grabber"
-APP_VERSION = "0.12.2"
+APP_VERSION = "0.12.3"
 # Compatibility name; the grabber uses the same global component sheet.
 GRABBER_INTERACTION_STYLE = GLOBAL_STYLE_SHEET
 

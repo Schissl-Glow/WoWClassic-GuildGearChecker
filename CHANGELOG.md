@@ -2,6 +2,12 @@
 
 Dieses Changelog hält den aktuellen Entwicklungsstand kompakt. Ältere Einzel-Release-Notes wurden aus dem Repository-Root entfernt; ihre Inhalte bleiben weiterhin vollständig über die Git-Historie nachvollziehbar.
 
+## 0.12.3 – Release
+
+- Der Portrait Grabber startet wieder über den Starter und aus dem Checker heraus.
+- Die V2-Charakterverwaltung zeigt Raidanzahl und wichtige Daten kompakt neben dem Portrait; Portraits erscheinen dort ohne Rangrahmen.
+- Charaktere lassen sich manuell anlegen und als irrelevant kennzeichnen oder wiederherstellen. Das Roster zeigt weiterhin nur aktive, relevante Charaktere.
+
 ## 0.12.2 – Release
 
 - Checker, Startmenü und Portrait Grabber nutzen eine gemeinsame Qt-Stylesheet-Basis. Der Kopfbereich verbindet Gildenbanner, Navigation und Roster-Werkzeuge klarer.

@@ -16,6 +16,7 @@ from app.identity_v2 import (  # noqa: E402
 from app.identity_v2_character_rows import character_table_rows  # noqa: E402
 from app.identity_v2_character_service import (  # noqa: E402
     CharacterDataError, DeathAttendanceConflict, MemberEdit, apply_member_edits,
+    create_manual_character,
     clear_member_death_marking, confirm_member_check, correct_member_death_date,
     mark_member_dead, set_member_class, set_member_gear_status, set_member_note,
     set_member_race, set_member_raid_role, set_member_raid_status, set_member_spec,
@@ -78,6 +79,52 @@ class IdentityV2CharacterServiceTests(unittest.TestCase):
         self.assertEqual(restored.to_payload(), loaded.to_payload())
         for key in ("players", "raids", "attendance", "legacyClmGuidMemberMap"):
             self.assertEqual(restored.to_payload()[key], old[key])
+
+    def test_manual_character_uses_v2_identity_and_existing_player_services(self):
+        before = self.store.to_payload()
+        changed, member_id = create_manual_character(
+            self.store, "  Neu  ", "Mage", "p1", "twink")
+        self.assertEqual(member_id, "m1000")
+        created = next(member for member in changed.members
+                       if member.memberId == member_id)
+        self.assertEqual((created.name, created.className, created.playerId,
+                          created.lifeStatus, created.gearStatus, created.raidRole),
+                         ("Neu", "Mage", "p1", "active", "Level", "not_set"))
+        self.assertEqual(changed.players[0].mainMemberId, "m1")
+        self.assertEqual(changed.attendance, self.store.attendance)
+        self.assertEqual(changed.eternalDkpRecords, self.store.eternalDkpRecords)
+        self.assertEqual(changed.currentDkpByMemberId, self.store.currentDkpByMemberId)
+        self.assertEqual(self.store.to_payload(), before)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "manual.ggc"
+            save_new_identity_v2(changed, target)
+            restored = load_identity_v2(target)
+        self.assertEqual(restored.to_payload(), changed.to_payload())
+
+        unknown, unknown_id = create_manual_character(self.store, "Ohne Spieler", None)
+        self.assertEqual(unknown_id, "m1000")
+        self.assertIsNone(unknown.members[-1].playerId)
+        promoted, main_id = create_manual_character(
+            self.store, "Neuer Main", "Priest", "p1", "main")
+        self.assertEqual(promoted.players[0].mainMemberId, main_id)
+        self.assertEqual(len(promoted.players[0].mainHistory), 1)
+        self.assertEqual(promoted.attendance, self.store.attendance)
+
+    def test_manual_character_blocks_live_duplicate_and_preserves_dead_incarnation(self):
+        with self.assertRaises(CharacterDataError):
+            create_manual_character(self.store, "B\u00cdFI", "Hunter")
+        with self.assertRaises(CharacterDataError):
+            create_manual_character(self.store, "", "Mage")
+        self.assertEqual(len(self.store.members), 3)
+        historical = IdentityV2Store(members=[
+            Member("m1000", "Soregdrei", "Mage", lifeStatus="dead",
+                   deathDate="2026-02-01", burialType="collective"),
+        ])
+        reincarnated, member_id = create_manual_character(
+            historical, "Soregdrei", "Mage")
+        self.assertEqual(member_id, "m1001")
+        self.assertEqual(reincarnated.members[0].lifeStatus, "dead")
+        self.assertEqual(reincarnated.members[1].lifeStatus, "active")
 
     def test_irrelevant_member_roundtrip_and_attendance_invariant(self):
         unknown = next(item for item in self.store.members if item.memberId == "m3")

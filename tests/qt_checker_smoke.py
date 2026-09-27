@@ -89,10 +89,11 @@ adjust_dialog.deleteLater()
 
 main_pages = ("rooster", "graveyard", "management", "raid", "settings")
 v2_pages = (
-    "identity_v2", "identity_v2_raid",
+    "identity_v2_raid",
     "identity_v2_players", "identity_v2_character_data",
 )
 assert list(window._nav_buttons) == list(main_pages)
+assert "identity_v2" not in window._pages
 assert set(main_pages) | {"player_profile", *v2_pages} <= window._pages.keys()
 assert all(window.stack.indexOf(window._pages[key]) >= 0
            for key in (*main_pages, "player_profile", *v2_pages))
@@ -114,7 +115,6 @@ try:
         ("identity_v2_character_data", "identity_v2_character_data"),
         ("raid", "raid"),
         ("settings", "settings"),
-        ("identity_v2", "identity_v2"),
         ("identity_v2_matrix", "raid"),
         ("identity_v2_points", "raid"),
     ):
@@ -122,6 +122,9 @@ try:
         assert window.stack.currentWidget() is window._pages[target]
         if route == "raid":
             assert window.raid_subtabs.currentWidget() is window.raids_page
+    current_page = window.stack.currentWidget()
+    window.switch_page("identity_v2", refresh=False)
+    assert window.stack.currentWidget() is current_page
 finally:
     window._set_project_mode("legacy")
     window.switch_page("rooster", refresh=False)

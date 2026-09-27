@@ -16,6 +16,7 @@ class CharacterTableRow:
     playerName: str | None
     playerRole: str | None
     lifeStatus: str
+    irrelevant: bool
     race: str | None
     className: str | None
     spec: str | None
@@ -55,7 +56,7 @@ def character_table_rows(store: IdentityV2Store) -> tuple[CharacterTableRow, ...
             memberId=member.memberId, name=member.name,
             playerName=player.displayName if player is not None else None,
             playerRole=role, lifeStatus=member.lifeStatus,
-            race=member.race, className=member.className, spec=member.spec,
+            irrelevant=member.irrelevant, race=member.race, className=member.className, spec=member.spec,
             raidRole=member.raidRole, gearStatus=member.gearStatus,
             raidStatus=member.raidStatus, note=member.note,
             lastChecked=member.lastChecked, raidCount=counts[member.memberId],

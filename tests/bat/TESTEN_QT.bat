@@ -2,7 +2,7 @@
 setlocal EnableExtensions
 for %%I in ("%~dp0..\..") do set "REPO_ROOT=%%~fI"
 cd /d "%REPO_ROOT%"
-title Guild Gear Checker v0.12.0 - Qt Kurztest
+title Guild Gear Checker v0.12.3 - Qt Kurztest
 call "%REPO_ROOT%\tools\_FIND_QT_PYTHON.cmd"
 if not defined GGC_QT_PYTHON goto :NO_PYTHON
 set "PATH=%GGC_QT_ENV%;%GGC_QT_ENV%Scripts;%GGC_QT_ENV%Library\bin;%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem"

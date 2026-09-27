@@ -62,6 +62,19 @@ def member_id_from_number(number: int) -> str:
     return f"m{number:04d}"
 
 
+def next_member_id(store: IdentityV2Store) -> str:
+    """Allocate the next stable m#### ID used by manual and CSV additions."""
+    existing_ids = {member.memberId for member in store.members}
+    numbers = [int(match.group(1)) for member_id in existing_ids
+               if (match := re.fullmatch(r"m(\d+)", member_id))]
+    number = max((FIRST_MEMBER_NUMBER - 1, *numbers)) + 1
+    member_id = member_id_from_number(number)
+    while member_id in existing_ids:
+        number += 1
+        member_id = member_id_from_number(number)
+    return member_id
+
+
 def player_id_from_number(number: int) -> str:
     """Create a stable technical Player ID independent of names and Main roles."""
     if isinstance(number, bool) or not isinstance(number, int) or number < FIRST_PLAYER_NUMBER:

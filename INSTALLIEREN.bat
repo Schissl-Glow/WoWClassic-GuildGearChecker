@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title WoWClassic-GuildGearChecker v0.12.2 - Installation
+title WoWClassic-GuildGearChecker v0.12.3 - Installation
 
 set "ENV_DIR=%LOCALAPPDATA%\GuildGearChecker\qt_env"
 set "GGC_QT_PYTHON=%ENV_DIR%\python.exe"
@@ -10,7 +10,7 @@ call "%~dp0tools\_FIND_CONDA.cmd"
 if not defined GGC_CONDA goto :NO_CONDA
 
 echo ============================================================
-echo   WoWClassic-GuildGearChecker v0.12.2 - lokale Qt-Installation
+echo   WoWClassic-GuildGearChecker v0.12.3 - lokale Qt-Installation
 echo ============================================================
 echo.
 echo Diese Installation verwendet eine kurze benutzerspezifische Qt-Umgebung:

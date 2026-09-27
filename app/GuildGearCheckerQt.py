@@ -6,7 +6,7 @@ This module deliberately reuses the established domain/data logic from
 Tkinter checker remains included as a fallback while the Qt migration is
 validated locally.
 
-Version: 0.12.2
+Version: 0.12.3
 """
 from __future__ import annotations
 

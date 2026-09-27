@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
@@ -14,7 +13,8 @@ from .csv_v2_analysis import (
     CsvRaidImportPlan, analyze_csv_raids_for_v2, v2_store_fingerprint,
 )
 from .identity_v2 import (
-    Attendance, CsvRaidSource, IdentityV2Store, Member, Raid, member_id_from_number,
+    Attendance, CsvRaidSource, IdentityV2Store, Member, Raid,
+    member_id_from_number, next_member_id,
     new_v2_attendance_id, new_v2_raid_id, require_member_attendance_date,
 )
 from .identity_v2_import_choices import CharacterImportChoice
@@ -60,12 +60,6 @@ class CsvImportSummary:
     clm_metadata_reports: int = 0
     csv_names_not_attended_to_clm: int = 0
     csv_extra_names_against_clm: int = 0
-
-
-def _next_member_number(store: IdentityV2Store) -> int:
-    numbers = [int(match.group(1)) for member in store.members
-               if (match := re.fullmatch(r"m(\d+)", member.memberId))]
-    return max((999, *numbers)) + 1
 
 
 def _append_csv_source(raid: Raid, source: Path, report_url: str | None) -> None:
@@ -313,7 +307,7 @@ def materialize_csv_raid_import(
     existing_attendance = {(item.raidId, item.memberId) for item in result.attendance}
     old_raid_starts = {member.memberId: member.raidStartDate for member in result.members}
 
-    next_number = _next_member_number(result)
+    next_number = int(next_member_id(result)[1:])
     new_member_ids: dict[str, str | None] = {}
     ignored_members = 0
     for candidate in effective_plan.new_member_candidates:

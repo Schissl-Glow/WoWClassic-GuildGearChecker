@@ -8,7 +8,11 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Iterable
 
-from .identity_v2 import BURIAL_TYPES, IdentityV2Store, IdentityV2ValidationError, Member
+from .identity_v2 import (
+    BURIAL_TYPES, IdentityV2Store, IdentityV2ValidationError, Member, next_member_id,
+)
+from .csv_import import exact_name_key
+from .identity_v2_player_service import assign_member, set_main
 from .identity_v2_graveyard import reserve_individual_gravestone
 from .gravestone_templates import GravestoneTemplate
 from .identity_v2_main_history import (
@@ -84,6 +88,37 @@ def _member(store: IdentityV2Store, member_id: str) -> Member:
     if member is None:
         raise CharacterDataError(f"Unbekannter Member: {member_id!r}.")
     return member
+
+
+def create_manual_character(
+    store: IdentityV2Store, name: str, class_name: str | None,
+    player_id: str | None = None, character_type: str | None = None,
+) -> tuple[IdentityV2Store, str]:
+    """Create one ordinary V2 Member without inventing raid or DKP records."""
+    store.validate()
+    if not isinstance(name, str) or not name.strip():
+        raise CharacterDataError("Charaktername darf nicht leer sein.")
+    name = name.strip()
+    key = exact_name_key(name)
+    if any(member.lifeStatus != "dead" and exact_name_key(member.name) == key
+           for member in store.members):
+        raise CharacterDataError(f"Charakter {name!r} ist bereits vorhanden.")
+    if class_name is not None and class_name not in CLASS_SPECS:
+        raise CharacterDataError(f"Unbekannte Klasse: {class_name!r}.")
+    if player_id is None:
+        if character_type is not None:
+            raise CharacterDataError("Main/Twink erfordert einen Spieler.")
+    elif character_type not in {"main", "twink"}:
+        raise CharacterDataError("Main oder Twink muss ausgewaehlt werden.")
+
+    member_id = next_member_id(store)
+    result = _apply(store, lambda working: working.members.append(
+        Member(memberId=member_id, name=name, className=class_name)))
+    if player_id is not None:
+        result = assign_member(result, member_id, player_id)
+        if character_type == "main":
+            result = set_main(result, player_id, member_id)
+    return result, member_id
 
 
 def set_members_irrelevant(
